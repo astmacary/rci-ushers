@@ -143,6 +143,7 @@ ol.steps li{padding-left:2px}
 .admin-grid .field{gap:3px}
 .admin-grid select{padding:7px 10px;min-height:38px;font-size:14px}
 .admin-grid label{font-size:12.5px}
+.admin-grid .field-tag{display:flex;margin-top:2px}
 .ann-meta{color:var(--muted);font-size:12.5px;font-weight:500}
 .ann-form{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .announce .thanks{margin-top:8px;font-weight:600}
@@ -341,7 +342,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "10";
+const APP_VERSION = "11";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1129,8 +1130,8 @@ function viewAdmin(){
           : saveIcon()}</div>
       </div>
       <div class="admin-grid">
-        <div class="field wide"><label for="ad-pl-${sid}">Usher Placement ${s1 && filled(i.role) ? statusPill(s1) : ""}</label><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select></div>
-        <div class="field wide"><label for="ad-p2-${sid}">Altar Worker Placement ${s2 ? statusPill(s2) : ""}</label><select id="ad-p2-${sid}" data-f="Placement2" ${locked ? "disabled" : ""}>${opts(S.placements2, i.role2, "—")}</select></div>
+        <div class="field wide"><label for="ad-pl-${sid}">Usher Placement</label><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select>${s1 && filled(i.role) ? `<div class="field-tag">${statusPill(s1)}</div>` : ""}</div>
+        <div class="field wide"><label for="ad-p2-${sid}">Altar Worker Placement</label><select id="ad-p2-${sid}" data-f="Placement2" ${locked ? "disabled" : ""}>${opts(S.placements2, i.role2, "—")}</select>${s2 ? `<div class="field-tag">${statusPill(s2)}</div>` : ""}</div>
       </div>
     </form>`;
   }).join("");
