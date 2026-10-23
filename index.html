@@ -143,7 +143,7 @@ ol.steps li{padding-left:2px}
 .admin-grid .field{gap:3px}
 .admin-grid select{padding:7px 10px;min-height:38px;font-size:14px}
 .admin-grid label{font-size:12.5px}
-.admin-grid .field-tag{display:flex;margin-top:2px}
+.admin-grid .field-tag{display:flex;justify-content:center;margin-top:4px}
 .ann-meta{color:var(--muted);font-size:12.5px;font-weight:500}
 .ann-form{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .announce .thanks{margin-top:8px;font-weight:600}
@@ -305,6 +305,20 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .group-h:first-of-type{margin-top:4px}
 /* Hide Netlify's toolbar, which Netlify adds to the page for people signed in to Netlify */
 iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!important}
+
+/* Edit Schedule: day heading with editable Service Category, other-date picker, No Service */
+.admin-day{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:4px 0 0}
+.admin-day .section-label{margin:0}
+.cat-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:none;padding:2px 0;font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);cursor:pointer;text-align:left}
+.cat-btn svg{width:13px;height:13px;flex:none;opacity:.8}
+.cat-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cat-form select{padding:6px 10px;min-height:36px;font-size:14px}
+.date-chip.pick{position:relative;cursor:pointer;border-style:dashed}
+.date-chip.pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.no-svc-btn{width:100%;background:var(--bad);border-color:var(--bad);color:#FFFFFF;font-weight:700}
+.no-svc-ask{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad);border-radius:var(--r);padding:10px 14px;font-weight:600}
+.no-svc-ask .btn{padding:6px 12px}
+.no-svc-ask .yes{background:var(--bad);border-color:var(--bad);color:#FFFFFF}
 </style>
 </head>
 <body>
@@ -342,7 +356,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "11";
+const APP_VERSION = "12";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -514,6 +528,7 @@ const LiveAPI = {
     }
     const C = this.col;
     placements = (cols.value.find(c => c.name === C.Placement)?.choice?.choices) || [];
+    S.categories = (cols.value.find(c => c.name === C.ServiceCategory)?.choice?.choices) || [];
     const has = key => !cols.value.length || cols.value.some(c => c.name === C[key]);
     const placements2 = (cols.value.find(c => c.name === C.Placement2)?.choice?.choices) || [];
     const sel = [C.ServiceDate, C.Name + "LookupId", C.SecurityName, C.Placement, ...["Placement2", "Status2"].filter(has).map(k => C[k]), C.Status, C.ServiceCategory, C.CallTime, C.PhoneNumber, C.Birthday, C.Photo, C.ArchiveStatus].join(",");
@@ -570,6 +585,12 @@ const LiveAPI = {
     const out = {}; for (const [k, v] of Object.entries(fields)) out[this.col[k] || k] = v;
     await this.g(`/sites/${this.siteId}/lists/${CONFIG.listId}/items/${id}/fields`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(out) });
+  },
+  /* Adds a schedule row for a date (used for "No Service" days). */
+  async addRow(k, cat){
+    const f = { [this.col.ServiceDate || "Date"]: toSp(k), [this.col.ServiceCategory || "ServiceCategory"]: cat };
+    const r = await this.g(`/sites/${this.siteId}/lists/${CONFIG.listId}/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: f }) });
+    return String(r.id);
   },
   /* SharePoint's own API is needed for photos stored as row attachments (Graph can't read those). */
   spOff: false,
@@ -685,6 +706,7 @@ const DemoAPI = {
     await new Promise(r => setTimeout(r, 250));
   },
   photo(){ return Promise.resolve(null); },
+  async addRow(){ await new Promise(r => setTimeout(r, 250)); return "d" + Date.now(); },
   async postMessage(to, text){ return { id: "d" + Date.now(), toId: String(to.id), text, fromName: S.me.name, fromEmail: S.me.emails[0], at: new Date().toISOString() }; },
   async deleteMessage(){},
   async addAnnouncement(text, until){ return { id: Date.now(), text, until: until || "", flyer: "" }; },
@@ -895,7 +917,8 @@ const canEditAnns = () => DEMO || (S.me?.emails || []).some(e => CONFIG.editors.
 function viewHome(){
   const t = todayKey(), wk = addDays(t, 7);
   const pend = assignments().filter(i => mine(i) && pending(i) && i.date >= t).sort(byDate);
-  const up = assignments().filter(i => mine(i) && approved(i) && i.date >= t && i.date <= wk).sort(byDate);
+  // Altar worker placements always go under the usher placements.
+  const up = assignments().filter(i => mine(i) && approved(i) && i.date >= t && i.date <= wk).sort((a, b) => (a.slot === 2) - (b.slot === 2) || byDate(a, b));
   const first = myProfile()?.first || firstOf(S.me.name);
   // Soonest "Show Until" first; announcements with no end date go last, oldest first.
   const anns = (S.announcements || []).filter(a => a.text && (!a.until || a.until >= t))
@@ -948,11 +971,11 @@ function viewCalendar(){
   let cells = "";
   for (let n = 0; n < weeks*7; n++){
     const k = addDays(start, n), d = fromKey(k), ev = eventsOn(k);
-    const dots = (ev.a.length ? '<i class="svc" aria-hidden="true"></i>' : "") + (ev.b.length ? '<span class="cake" aria-hidden="true">🎂</span>' : "");
-    cells += `<button class="dcell ${d.getMonth()!==m.getMonth()?"out":""} ${k===t?"today":""} ${k===sel?"sel":""}" data-act="pick" data-date="${k}" aria-label="${esc(fmtLong(k))}${ev.a.length?`, ${ev.a.length} assignments`:""}${ev.b.length?", birthday":""}"><span>${d.getDate()}</span><span class="dots">${dots}</span></button>`;
+    const dots = (ev.none ? '<span class="cake" aria-hidden="true">❌</span>' : "") + (ev.a.length ? '<i class="svc" aria-hidden="true"></i>' : "") + (ev.b.length ? '<span class="cake" aria-hidden="true">🎂</span>' : "");
+    cells += `<button class="dcell ${d.getMonth()!==m.getMonth()?"out":""} ${k===t?"today":""} ${k===sel?"sel":""}" data-act="pick" data-date="${k}" aria-label="${esc(fmtLong(k))}${ev.none?", no service":""}${ev.a.length?`, ${ev.a.length} assignments`:""}${ev.b.length?", birthday":""}"><span>${d.getDate()}</span><span class="dots">${dots}</span></button>`;
   }
   const ev = eventsOn(sel);
-  const cats = [...new Set(assignments().filter(i => i.date === sel && filled(i.category)).map(i => i.category))];
+  const cats = [...new Set(assignments().filter(i => i.date === sel && filled(i.category) && !isNoService(i)).map(i => i.category))];
   // Split the day's roster: placements named "Altar Worker…" in their own frame under Ushers.
   // Ushers: the Usher Placement (Placement). Altar Workers: the Altar Worker Placement (Placement2),
   // or an Usher Placement named "Altar Worker…". Someone with both shows in both frames.
@@ -972,8 +995,9 @@ function viewCalendar(){
     </section>
     <section><div class="day-h"><h2 class="section-label">${esc(fmtLong(sel))}${cats.length ? ` <span class="day-cat">${esc(cats.join(" / "))}</span>` : ""}</h2>
         ${isEditor() && adminRows().some(i => i.date === sel) ? `<button class="iconbtn notes-btn" data-act="admin-open" data-date="${sel}" aria-label="Edit this day's schedule" title="Edit schedule">${ICON.pencil}</button>` : ""}</div>
+      ${ev.none ? `<div class="no-service"><span aria-hidden="true">❌</span> No Service</div>` : ""}
       ${bdayRows ? `<div class="panel daylist" style="margin-bottom:10px">${bdayRows}</div>` : ""}
-      ${team ? team : (bdayRows ? "" : `<div class="empty">No events scheduled.</div>`)}
+      ${team ? team : (bdayRows || ev.none ? "" : `<div class="empty">No events scheduled.</div>`)}
     </section>`;
 }
 
@@ -1108,13 +1132,51 @@ function opts(list, cur, blank){
   return (blank ? `<option value="">${blank}</option>` : "") + all.map(v => `<option ${v === cur ? "selected" : ""}>${esc(v)}</option>`).join("");
 }
 function saveIcon(){ return `<button class="iconbtn notes-btn save-btn" type="submit" disabled aria-label="Save changes" title="Save changes">${ICON.check}</button>`; }
+/* ---------- Edit Schedule: No Service days and the day's Service Category ---------- */
+const isNoService = i => lc(i.category || "") === lc(CONFIG.noServiceCategory);
+const svcFilled = v => !!v && String(v).trim() !== "" && String(v).trim() !== "--";
+const NOT_A_SERVICE = ["--", "🎂 Birthday", "Absent", "Declined", "No Show", "No Response"];
+function serviceChoices(){
+  const all = (S.categories && S.categories.length) ? S.categories
+    : ["Sunday Morning", "Sunday Evening", "Monday Night", "Tuesday Night", "Wednesday Night", "Thursday Night", "Friday Night", "Funeral"];
+  return all.filter(c => !NOT_A_SERVICE.includes(c) && lc(c) !== lc(CONFIG.noServiceCategory) && !/^choice \d+$/i.test(c));
+}
+/* Date heading with the day's Service Category beside it (tap to change it for every row on that date). */
+function adminDayHeader(k, rows){
+  const svc = rows.filter(i => !isNoService(i));
+  const cats = [...new Set(svc.filter(i => svcFilled(i.category)).map(i => i.category))];
+  let cat = "";
+  if (S.catEdit === k && svc.length){
+    cat = `<form class="cat-form" id="catForm" data-date="${k}"><select id="cat-pick" aria-label="Service Category">${opts(serviceChoices(), cats.length === 1 ? cats[0] : "", cats.length === 1 ? "" : "— Choose —")}</select>
+      <button class="iconbtn notes-btn save-btn" type="submit" aria-label="Save Service Category" title="Save">${ICON.check}</button>
+      <button class="linkbtn" type="button" data-act="cat-cancel">Cancel</button></form>`;
+  } else if (svc.length){
+    cat = `<button class="cat-btn" type="button" data-act="cat-edit" data-date="${k}" title="Change the Service Category">${esc(cats.join(" · ") || "Add Service Category")}${ICON.pencil}</button>`;
+  }
+  return `<div class="admin-day"><h2 class="section-label">${esc(fmtLong(k))}</h2>${cat}</div>`;
+}
+/* The No Service notice (at the top of the day's roster), or the red button that marks the day. */
+function adminNoService(k, rows){
+  if (rows.some(isNoService)) return `<div class="no-service" style="margin:0"><span aria-hidden="true">❌</span> No Service</div>`;
+  if (S.noSvcAsk === k) return `<div class="no-svc-ask"><span>Mark ${esc(fmtShort(k))} as No Service?</span>
+    <button class="btn yes" data-act="no-service-yes" data-date="${k}" ${S.noSvcBusy ? "disabled" : ""}>${S.noSvcBusy ? "Saving…" : "Yes, No Service"}</button>
+    <button class="btn" data-act="no-service-keep" ${S.noSvcBusy ? "disabled" : ""}>Cancel</button></div>`;
+  return `<button class="btn no-svc-btn" data-act="no-service" data-date="${k}">❌ Mark ${esc(fmtShort(k))} as No Service</button>`;
+}
+/* A date chip that opens a date picker, for days that aren't on the schedule yet. */
+function adminPickChip(){
+  return `<label class="date-chip pick" title="Pick another date"><span>Other</span><b>+</b><span>Date</span><input type="date" id="admin-pick" min="${todayKey()}" aria-label="Pick another date"></label>`;
+}
+const adminDateList = base => [...new Set([...base, ...(S.adminExtra ? [S.adminExtra] : [])])].sort();
+
 function viewAdmin(){
   if (!isEditor()) return `${backBar("Edit Schedule")}<div class="empty">Only schedule admins can edit the schedule.</div>`;
-  const dates = adminDates();
-  if (!dates.length) return `${backBar("Edit Schedule")}<div class="empty">There's nothing on the schedule from today on.</div>`;
-  if (!S.adminDate || !dates.includes(S.adminDate)) S.adminDate = dates.find(d => d >= S.adminDate) || dates[0];
+  const dates = adminDateList(adminDates());
+  if (!S.adminDate || !dates.includes(S.adminDate)) S.adminDate = dates.find(d => d >= S.adminDate) || dates[0] || todayKey();
+  if (!dates.includes(S.adminDate)) dates.push(S.adminDate);
   const k = S.adminDate;
-  const rows = adminRows().filter(i => i.date === k).sort((x, y) => Number(x.id) - Number(y.id));   // same order as the SharePoint list
+  const dayRows = adminRows().filter(i => i.date === k);
+  const rows = dayRows.filter(i => !isNoService(i)).sort((x, y) => Number(x.id) - Number(y.id));   // same order as the SharePoint list
   const chips = dates.map(d => { const x = fromKey(d); return `<button class="date-chip ${d === k ? "on" : ""}" data-act="admin-date" data-date="${d}" aria-pressed="${d === k}"><span>${x.toLocaleDateString(undefined,{weekday:"short"})}</span><b>${x.getDate()}</b><span>${x.toLocaleDateString(undefined,{month:"short"})}</span></button>`; }).join("");
   const cards = rows.map(i => {
     const sid = esc(i.id);
@@ -1137,10 +1199,11 @@ function viewAdmin(){
   }).join("");
   return `${backBar("Edit Schedule")}
     <ol class="panel steps"><li>Choose an usher placement and/or an altar worker placement from the drop down menus.</li><li>Hit the <span class="inline-check" aria-label="check">${ICON.check}</span> to save.</li></ol>
-    <div class="date-chips" role="group" aria-label="Service dates">${chips}</div>
-    <h2 class="section-label" style="margin:4px 0 0">${esc(fmtLong(k))}</h2>
+    <div class="date-chips" role="group" aria-label="Service dates">${chips}${adminPickChip()}</div>
+    ${adminDayHeader(k, dayRows)}
+    ${adminNoService(k, dayRows)}
     <p class="sub" style="margin:-4px 0 0">${rows.length} ${rows.length === 1 ? "person" : "people"} scheduled</p>
-    <div class="list">${cards}</div>`;
+    ${rows.length ? `<div class="list">${cards}</div>` : ""}`;
 }
 
 /* ---------- red badge on the app icon for pending requests ---------- */
@@ -1251,7 +1314,21 @@ document.addEventListener("click", async e => {
     case "wall": go("member", b.dataset.id); requestAnimationFrame(() => { const w = document.getElementById("wall"); if (w) w.scrollIntoView({ block: "start", behavior: "smooth" }); }); break;
     case "msg-ask": S.confirmMsg = b.dataset.id; render(); break;
     case "admin-open": if (b.dataset.date) S.adminDate = b.dataset.date; go("admin"); break;
-    case "admin-date": S.adminDate = b.dataset.date; render(); document.querySelector(`[data-act="admin-date"][data-date="${S.adminDate}"]`)?.scrollIntoView({ inline: "center", block: "nearest" }); break;
+    case "cat-edit": S.catEdit = b.dataset.date; render(); $("#cat-pick")?.focus(); break;
+    case "cat-cancel": S.catEdit = null; render(); break;
+    case "no-service": S.noSvcAsk = b.dataset.date; render(); break;
+    case "no-service-keep": S.noSvcAsk = null; render(); break;
+    case "no-service-yes": {
+      if (!isEditor() || S.noSvcBusy) break;
+      const k = b.dataset.date; S.noSvcBusy = true; render();
+      try {
+        const id = await API.addRow(k, CONFIG.noServiceCategory);
+        const it = normalize(id, { ServiceCategory: CONFIG.noServiceCategory }); it.date = k; it.archived = false;
+        S.items.push(it); S.noSvcAsk = null; toast(`${fmtShort(k)} marked as No Service`);
+      } catch(err){ toast("Couldn't mark it. " + err.message, true); }
+      S.noSvcBusy = false; render(); break;
+    }
+    case "admin-date": S.catEdit = null; S.noSvcAsk = null; S.adminDate = b.dataset.date; render(); document.querySelector(`[data-act="admin-date"][data-date="${S.adminDate}"]`)?.scrollIntoView({ inline: "center", block: "nearest" }); break;
     case "admin-unlock": {
       const row = b.closest(".admin-row");
       (S.adminUnlocked = S.adminUnlocked || new Set()).add(b.dataset.id);
@@ -1294,6 +1371,17 @@ document.addEventListener("click", async e => {
 
 document.addEventListener("submit", async e => {
   e.preventDefault();
+  if (e.target.id === "catForm"){
+    if (!isEditor()) return;
+    const k = e.target.dataset.date, v = $("#cat-pick").value; if (!v) return;
+    const list = S.items.filter(i => !isProfile(i) && i.date === k && !isNoService(i) && i.category !== v);
+    const btn = e.target.querySelector('button[type="submit"]'); btn.disabled = true; btn.classList.add("busy");
+    try {
+      for (const i of list){ await API.update(i.id, { ServiceCategory: v }); i.category = v; }
+      S.catEdit = null; toast(`${fmtShort(k)}: ${v}`); render();
+    } catch(err){ toast("Couldn't change it. " + err.message, true); btn.disabled = false; btn.classList.remove("busy"); render(); }
+    return;
+  }
   const p = myProfile();
   if (e.target.id === "absenceForm" && p){
     const A = absState(), dates = [...A.sel].sort(), notes = $("#ab-notes").value.trim();
@@ -1369,6 +1457,7 @@ document.addEventListener("submit", async e => {
 document.addEventListener("input", e => { if (e.target.id === "ab-notes") absState().notes = e.target.value; });
 
 document.addEventListener("change", async e => {
+  if (e.target.id === "admin-pick"){ if (e.target.value){ S.adminExtra = e.target.value; S.adminDate = e.target.value; S.catEdit = null; S.noSvcAsk = null; render(); } return; }
   const adRow = e.target.closest(".admin-row");
   if (adRow){ adRow.querySelector('button[type="submit"]').disabled = false; return; }
   if (e.target.id !== "pf-photo" || !e.target.files[0]) return;
