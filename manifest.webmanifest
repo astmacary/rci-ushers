@@ -1,7 +1,7 @@
 {
-  "name": "RCI Ushers",
+  "name": "RCI Ushers & Altar Workers",
   "short_name": "RCI Ushers",
-  "description": "Serving schedule, requests, calendar and team info for the RCI usher team.",
+  "description": "Serving schedule, requests, calendar and team info for the RCI ushers and altar workers.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
