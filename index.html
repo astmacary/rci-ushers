@@ -138,7 +138,8 @@ a.btn{text-decoration:none}
 .inline-check svg{width:12px;height:12px}
 ol.steps{margin:-6px 0 0;padding:12px 16px 12px 36px;display:flex;flex-direction:column;gap:4px}
 ol.steps li{padding-left:2px}
-.admin-grid{display:grid;grid-template-columns:1fr;gap:6px}
+.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:340px){.admin-grid{grid-template-columns:1fr}}
 .admin-grid .field{gap:3px}
 .admin-grid select{padding:7px 10px;min-height:38px;font-size:14px}
 .admin-grid label{font-size:12.5px}
@@ -340,7 +341,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "8";
+const APP_VERSION = "9";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -410,6 +411,7 @@ function normalize(id, f, emailById){
   return {
     id: String(id),
     role: f.Placement || "",
+    role2: f.Placement2 || "",
     date: f.ServiceDate ? spDate(f.ServiceDate) : "",
     category: roster ? CONFIG.profileCategory : (f.ServiceCategory || ""),
     call: f.CallTime || "",
@@ -442,7 +444,7 @@ function buildPeople(rows){
 /* The app's own names for the list's columns → display names to look for if the internal name differs. */
 const COLUMNS = {
   ServiceDate: ["Service Date"], Name: ["Name"], SecurityName: ["Usher's Name", "Usher’s Name", "Ushers Name", "Usher Name"],
-  Placement: ["Placement"], Status: ["Status"], ServiceCategory: ["Service Category"], CallTime: ["Call Time"],
+  Placement: ["Placement", "Usher Placement"], Placement2: ["Placement2", "Altar Worker Placement"], Status: ["Status"], ServiceCategory: ["Service Category"], CallTime: ["Call Time"],
   PhoneNumber: ["Phone Number", "Phone"], Birthday: ["Birthday"], Photo: ["Photo"], ArchiveStatus: ["Archive Status"]
 };
 const LiveAPI = {
@@ -510,7 +512,9 @@ const LiveAPI = {
     }
     const C = this.col;
     placements = (cols.value.find(c => c.name === C.Placement)?.choice?.choices) || [];
-    const sel = [C.ServiceDate, C.Name + "LookupId", C.SecurityName, C.Placement, C.Status, C.ServiceCategory, C.CallTime, C.PhoneNumber, C.Birthday, C.Photo, C.ArchiveStatus].join(",");
+    const hasP2 = cols.value.some(c => c.name === C.Placement2);
+    const placements2 = (cols.value.find(c => c.name === C.Placement2)?.choice?.choices) || [];
+    const sel = [C.ServiceDate, C.Name + "LookupId", C.SecurityName, C.Placement, ...(hasP2 ? [C.Placement2] : []), C.Status, C.ServiceCategory, C.CallTime, C.PhoneNumber, C.Birthday, C.Photo, C.ArchiveStatus].join(",");
     const raw = await this.all(`${base}/${CONFIG.listId}/items?$expand=fields($select=${sel})&$top=500`);
     // Rename the list's columns to the app's own names.
     const rows = raw.map(r => { const f = {}; for (const key of Object.keys(COLUMNS)) f[key] = r.fields[C[key]];
@@ -518,7 +522,7 @@ const LiveAPI = {
     return {
       me: { name: me.displayName || this.account.name || "", emails: [me.mail, me.userPrincipalName, this.account.username].filter(Boolean).map(lc) },
       items: (list => list.concat(buildPeople(list)))(rows.map(r => normalize(r.id, r.fields, emailById))),
-      names, servingChoices, placements,
+      names, servingChoices, placements, placements2,
       messages: await this.messages(),
       announcements: await this.announcements()
     };
@@ -671,7 +675,7 @@ const DemoAPI = {
       { id: 2, text: "On Sunday, November 1st, we are going to Reach Out Tabernacle. There is no Sunday morning service at The Ramp.", until: "2026-11-01", flyer: "demo" }
     ];
     return { me: { name: people[0][0], emails: [people[0][1]] }, items, names: people.map(p=>p[0]), servingChoices: [], announcements, messages: [],
-      placements: ["Main Lobby","Aisle 0/1 (Left Front Wall)","Aisle 2","Aisle 3","Aisle 4 (Right Front Wall)","Guest Lobby","Balcony","Floater","Pastor's Door","Pastor/Adjutant/Middle Aisle","Altar Worker","N/A","--"] };
+      placements: ["Main Lobby","Aisle 0/1 (Left Front Wall)","Aisle 2","Aisle 3","Aisle 4 (Right Front Wall)","Guest Lobby","Balcony","Floater","Pastor's Door","Pastor/Adjutant/Middle Aisle","Altar Worker","N/A","--"], placements2: ["Altar Worker","--"] };
   },
   async update(id, fields){
     await new Promise(r => setTimeout(r, 250));
@@ -699,8 +703,10 @@ const profileOf = i => S.items.find(p => isProfile(p) && ((i.email && p.email ==
 const filled = v => !!v && v.trim() !== "" && v.trim() !== "--";
 // Accepted: Status = Accepted. Pending request: Status = Pending and Service Category, Usher's Name and Placement are all filled in (not "--").
 const approved = i => lc(i.status) === "accepted";
-const pending  = i => lc(i.status) === "pending" && filled(i.category) && filled(i.fullName) && filled(i.role);
-const byDate = (a,b) => a.date.localeCompare(b.date) || a.role.localeCompare(b.role);
+// A row can have an usher placement, an altar worker placement, or both.
+const roleText = i => [i.role, i.role2].filter(filled).join(" · ") || i.role || "";
+const pending  = i => lc(i.status) === "pending" && filled(i.category) && filled(i.fullName) && (filled(i.role) || filled(i.role2));
+const byDate = (a,b) => a.date.localeCompare(b.date) || roleText(a).localeCompare(roleText(b));
 const assignments = () => S.items.filter(i => !isProfile(i) && i.date);
 
 /* ============================================================
@@ -847,7 +853,7 @@ function cue(i, opts={}){
   const busy = S.busy.has(i.id);
   let actions = "";
   if (S.confirm === i.id && (isPending || approved(i))){
-    actions = `<div class="confirm-row">Decline ${esc(i.role)} on ${esc(fmtShort(i.date))}?
+    actions = `<div class="confirm-row">Decline ${esc(roleText(i))} on ${esc(fmtShort(i.date))}?
       <button class="btn decline-soft" data-act="decline" data-id="${i.id}" ${busy?"disabled":""}>Yes, Decline</button>
       <button class="btn" data-act="cancel">Keep It</button></div>`;
   } else if (isPending){
@@ -862,7 +868,7 @@ function cue(i, opts={}){
   return `<article class="cue ${isPending?"pending":""}">
     <div class="when"><span class="dow">${d.toLocaleDateString(undefined,{weekday:"short"})}</span><span class="day">${d.getDate()}</span><span class="mon">${d.toLocaleDateString(undefined,{month:"short"})}</span></div>
     <div class="cue-body">
-      <div class="cue-top"><span class="role">${esc(i.role)}</span>${opts.pill ? statusPill(i) : ""}</div>
+      <div class="cue-top"><span class="role">${esc(roleText(i))}</span>${opts.pill ? statusPill(i) : ""}</div>
       <div class="cat">${esc(i.category)}</div>
       <div class="times">${i.call ? `<span>Call Time <b>${esc(i.call)}</b></span>` : ""}${i.svcTime ? `<span>Service Time <b>${esc(i.svcTime)}</b></span>` : ""}</div>
       ${actions}
@@ -914,7 +920,7 @@ function viewSchedule(){
 
 function eventsOn(k){
   const md = k.slice(5);
-  const a = assignments().filter(i => lc(i.status) === "accepted" && i.date === k).sort((x,y) => (x.fullName||"").localeCompare(y.fullName||"") || x.role.localeCompare(y.role));
+  const a = assignments().filter(i => lc(i.status) === "accepted" && i.date === k).sort((x,y) => (x.fullName||"").localeCompare(y.fullName||"") || roleText(x).localeCompare(roleText(y)));
   const b = S.items.filter(i => isProfile(i) && i.birthday && i.birthday.slice(5) === md);
   const none = S.items.some(i => i.date === k && lc(i.category) === lc(CONFIG.noServiceCategory));
   return { a, b, none };
@@ -934,10 +940,14 @@ function viewCalendar(){
   const ev = eventsOn(sel);
   const cats = [...new Set(assignments().filter(i => i.date === sel && filled(i.category)).map(i => i.category))];
   // Split the day's roster: placements named "Altar Worker…" in their own frame under Ushers.
-  const isAltar = i => /altar\s*worker/i.test(i.role || "");
-  const rowsOf = list => list.map(i => `<div class="row"><b>${esc(i.fullName || "Unassigned")}</b><span>${esc(i.role)}</span></div>`).join("");
+  // Ushers: the Usher Placement (Placement). Altar Workers: the Altar Worker Placement (Placement2),
+  // or an Usher Placement named "Altar Worker…". Someone with both shows in both frames.
+  const isAltarName = v => /altar\s*worker/i.test(v || "");
+  const ushers = ev.a.filter(i => filled(i.role) && !isAltarName(i.role)).map(i => [i, i.role]);
+  const altar = ev.a.filter(i => filled(i.role2) || isAltarName(i.role)).map(i => [i, filled(i.role2) ? i.role2 : i.role]);
+  const rowsOf = list => list.map(([i, place]) => `<div class="row"><b>${esc(i.fullName || "Unassigned")}</b><span>${esc(place)}</span></div>`).join("");
   const frame = (title, list) => list.length ? `<h3 class="section-label group-h">${title}</h3><div class="panel daylist">${rowsOf(list)}</div>` : "";
-  const team = frame("Ushers", ev.a.filter(i => !isAltar(i))) + frame("Altar Workers", ev.a.filter(isAltar));
+  const team = frame("Ushers", ushers) + frame("Altar Workers", altar);
   const bdayRows = ev.b.map(p => `<div class="row bday"><b>${esc(p.fullName)}</b><span>Birthday 🎂</span></div>`).join("");
   return `<section class="panel cal-panel">
       <div class="cal-head"><h2>${m.toLocaleDateString(undefined,{month:"long",year:"numeric"})}</h2>
@@ -978,7 +988,7 @@ function viewTeam(){
   const k = S.arg;
   const list = assignments().filter(i => i.date === k && approved(i)).sort(byDate);
   return `${backBar("Serving Team")}<p class="sub" style="margin-top:-12px">${esc(fmtLong(k))}</p>
-    ${list.length ? `<div class="roster">${list.map(i => tile(i, i.role, "member-of", i.id)).join("")}</div>`
+    ${list.length ? `<div class="roster">${list.map(i => tile(i, roleText(i), "member-of", i.id)).join("")}</div>`
       : `<div class="empty">No one is confirmed for this date yet.</div>`}`;
 }
 
@@ -990,7 +1000,7 @@ function viewMember(){
   return `${backBar(p.fullName)}
     ${personEditor(p)}
     ${wallSection(p)}
-    ${next.length ? `<section><h2 class="section-label">Serving Next</h2><div class="list">${next.map(i=>`<div class="panel" style="padding:10px 14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${esc(i.role)}</b><span class="sub" style="margin:0">${esc(fmtShort(i.date))} · ${esc(i.category)}</span></div>`).join("")}</div></section>` : ""}`;
+    ${next.length ? `<section><h2 class="section-label">Serving Next</h2><div class="list">${next.map(i=>`<div class="panel" style="padding:10px 14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${esc(roleText(i))}</b><span class="sub" style="margin:0">${esc(fmtShort(i.date))} · ${esc(i.category)}</span></div>`).join("")}</div></section>` : ""}`;
 }
 
 function noProfileMsg(){
@@ -1104,12 +1114,13 @@ function viewAdmin(){
           : saveIcon()}</div>
       </div>
       <div class="admin-grid">
-        <div class="field wide"><label for="ad-pl-${sid}">Placement</label><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select></div>
+        <div class="field wide"><label for="ad-pl-${sid}">Usher Placement</label><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select></div>
+        <div class="field wide"><label for="ad-p2-${sid}">Altar Worker Placement</label><select id="ad-p2-${sid}" data-f="Placement2" ${locked ? "disabled" : ""}>${opts(S.placements2, i.role2, "—")}</select></div>
       </div>
     </form>`;
   }).join("");
   return `${backBar("Edit Schedule")}
-    <ol class="panel steps"><li>Choose a placement from the drop down menu.</li><li>Hit the <span class="inline-check" aria-label="check">${ICON.check}</span> to save.</li></ol>
+    <ol class="panel steps"><li>Choose an usher placement and/or an altar worker placement from the drop down menus.</li><li>Hit the <span class="inline-check" aria-label="check">${ICON.check}</span> to save.</li></ol>
     <div class="date-chips" role="group" aria-label="Service dates">${chips}</div>
     <h2 class="section-label" style="margin:4px 0 0">${esc(fmtLong(k))}</h2>
     <p class="sub" style="margin:-4px 0 0">${rows.length} ${rows.length === 1 ? "person" : "people"} scheduled</p>
@@ -1186,7 +1197,7 @@ async function setStatus(item, accept){
   try {
     await API.update(item.id, fields);
     item.status = fields.Status;
-    toast(accept ? `Accepted: ${item.role}, ${fmtShort(item.date)}` : `Declined: ${item.role}, ${fmtShort(item.date)}`);
+    toast(accept ? `Accepted: ${roleText(item)}, ${fmtShort(item.date)}` : `Declined: ${roleText(item)}, ${fmtShort(item.date)}`);
   } catch(e){ toast("Couldn't save your reply. " + e.message, true); }
   S.busy.delete(item.id); S.confirm = null; render(); updateBadge();
 }
@@ -1281,17 +1292,20 @@ document.addEventListener("submit", async e => {
     if (!isEditor()) return;
     const item = S.items.find(i => i.id === e.target.dataset.id); if (!item) return;
     const placement = e.target.querySelector('[data-f="Placement"]').value;
+    const placement2 = e.target.querySelector('[data-f="Placement2"]')?.value ?? item.role2;
     const btn = e.target.querySelector('button[type="submit"]');
-    if (placement === item.role){ btn.disabled = true; return; }
+    if (placement === item.role && placement2 === (item.role2 || "")){ btn.disabled = true; return; }
     // Like the Productions app: a changed placement goes back to Pending, so the person confirms again.
-    const fields = { Placement: placement || null };
+    const fields = {};
+    if (placement !== item.role) fields.Placement = placement || null;
+    if (placement2 !== (item.role2 || "")) fields.Placement2 = placement2 || null;
     if (lc(item.status) !== "pending") fields.Status = "Pending";
     btn.disabled = true; btn.classList.add("busy");
     try {
       await API.update(item.id, fields);
-      item.role = placement; item.status = "Pending";
+      item.role = placement; item.role2 = placement2; item.status = "Pending";
       S.adminUnlocked?.delete(item.id);
-      toast(`Saved: ${item.fullName}, ${placement || "no placement"}, ${fmtShort(item.date)}`); render(); updateBadge();
+      toast(`Saved: ${item.fullName}, ${roleText(item) || "no placement"}, ${fmtShort(item.date)}`); render(); updateBadge();
     } catch(err){ toast("Couldn't save the change. " + err.message, true); btn.disabled = false; btn.classList.remove("busy"); }
     return;
   }
@@ -1359,7 +1373,7 @@ async function start(){
     const signedIn = await API.init();
     if (!signedIn){ S.phase = "signin"; render(); return; }
     const data = await API.load();
-    S.me = data.me; S.items = data.items; S.names = data.names; S.servingChoices = data.servingChoices || []; S.placements = data.placements || []; S.announcements = data.announcements || []; S.messages = data.messages || [];
+    S.me = data.me; S.items = data.items; S.names = data.names; S.servingChoices = data.servingChoices || []; S.placements = data.placements || []; S.placements2 = data.placements2 || []; S.announcements = data.announcements || []; S.messages = data.messages || [];
     const t = new Date(); S.cal.month = new Date(t.getFullYear(), t.getMonth(), 1); S.cal.sel = todayKey();
     S.phase = "ready"; render(); maybeConfetti(); updateBadge();
   } catch(e){
