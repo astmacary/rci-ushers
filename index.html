@@ -327,6 +327,9 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 .no-svc-ask .yes{background:var(--bad);border-color:var(--bad);color:#FFFFFF}
 .ann-title{display:block;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
 .ann-text{display:block;margin-top:2px;white-space:pre-line;color:var(--muted);font-size:14px;font-weight:500;line-height:1.45;overflow-wrap:anywhere}
+.flyer-picked{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.flyer-picked img{width:56px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.flyer-picked .linkbtn{margin:0}
 </style>
 </head>
 <body>
@@ -364,7 +367,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "17";
+const APP_VERSION = "18";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -485,6 +488,22 @@ function annHtml(t){
   const head = lines.shift() || "", rest = lines.join("\n");
   return `<b class="ann-title">${esc(head)}</b>${rest ? `<span class="ann-text">${esc(rest)}</span>` : ""}`;
 }
+/* Flyer picker inside the announcement form. Only this box re-renders, so typed text is kept. */
+function annFlyerField(){
+  const key = S.annEditId != null ? String(S.annEditId) : "new";
+  if (!S.annFlyer || S.annFlyer.key !== key) S.annFlyer = { key };
+  const d = S.annFlyer, ed = S.annEditId != null ? (S.announcements || []).find(a => a.id === S.annEditId) : null;
+  const has = ed && ed.flyer && !d.remove;
+  let status = "";
+  if (d.file) status = `<span class="flyer-picked">${d.preview ? `<img src="${d.preview}" alt="">` : ""}<span>${esc(d.file.name)}</span><button type="button" class="linkbtn" data-act="ann-flyer-clear">Remove Flyer</button></span>`;
+  else if (ed && ed.flyer) status = d.remove
+    ? `<span class="flyer-picked"><span>The current flyer will be removed.</span><button type="button" class="linkbtn" data-act="ann-flyer-keep">Keep It</button></span>`
+    : `<span class="flyer-picked"><span>This announcement has a flyer.</span><button type="button" class="linkbtn danger" data-act="ann-flyer-drop">Remove Flyer</button></span>`;
+  return `<div class="field" id="ann-flyer-box"><label>Flyer <span class="hint">(optional image; tap it on Home to see it full screen)</span></label>${status}
+    <label class="btn" for="ann-flyer" style="cursor:pointer;align-self:flex-start">${d.file || has ? "Change Flyer" : "Add a Flyer"}</label>
+    <input id="ann-flyer" type="file" accept="image/*" hidden></div>`;
+}
+const annFlyerRefresh = () => { const box = $("#ann-flyer-box"); if (box) box.outerHTML = annFlyerField(); };
 const LiveAPI = {
   msal: null, account: null, siteId: null, cache: new Map(), col: {},
   async init(){
@@ -586,21 +605,52 @@ const LiveAPI = {
   async announcements(){
     if (!CONFIG.announcementsListId) return [];
     try {
-      const rows = await this.all(`/sites/${this.siteId}/lists/${CONFIG.announcementsListId}/items?$expand=fields($select=Title,Announcements,ShowUntil)&$top=200`);
+      const rows = await this.all(`/sites/${this.siteId}/lists/${CONFIG.announcementsListId}/items?$expand=fields($select=Title,Announcements,ShowUntil,Flyer)&$top=200`);
       // The multi-line Announcements column is what shows; the one-line Announcement (Title) is the fallback.
-      return rows.map(r => ({ id: Number(r.id), text: annText(r.fields.Announcements) || r.fields.Title || "", until: spDate(r.fields.ShowUntil), flyer: "" }));
+      return rows.map(r => ({ id: Number(r.id), text: annText(r.fields.Announcements) || r.fields.Title || "", until: spDate(r.fields.ShowUntil), flyer: r.fields.Flyer ? (typeof r.fields.Flyer === "string" ? r.fields.Flyer : JSON.stringify(r.fields.Flyer)) : "" }));
     } catch(e){ console.warn("Couldn't read the Announcements list.", e); return []; }
   },
-  async addAnnouncement(text, until){
+  async addAnnouncement(text, until, flyer){
     if (!CONFIG.announcementsListId) throw new Error(`There's no "${CONFIG.announcementsListName}" list on the Ushers site.`);
+    const base = `/sites/${this.siteId}/lists/${CONFIG.announcementsListId}/items`;
     // Announcements holds the full text with line breaks; Title (required) gets a one-line copy, max 255 characters.
     const fields = { Announcements: text, Title: annOneLine(text) }; if (until) fields.ShowUntil = toSp(until);
-    const r = await this.g(`/sites/${this.siteId}/lists/${CONFIG.announcementsListId}/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) });
-    return { id: Number(r.id), text, until: until || "", flyer: "" };
+    const r = await this.g(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) });
+    const a = { id: Number(r.id), text, until: until || "", flyer: "" };
+    if (flyer){
+      try {
+        const raw = await this.assetImage(CONFIG.announcementsListId, `flyer_${r.id}_${Date.now()}.jpg`, flyer);
+        await this.g(`${base}/${r.id}/fields`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ Flyer: raw }) });
+        a.flyer = raw; a.flyerUrl = URL.createObjectURL(flyer);
+      } catch(e){ toast("The announcement was added, but the flyer didn't upload. " + e.message, true); }
+    }
+    return a;
   },
-  async updateAnnouncement(id, text, until){
-    await this.g(`/sites/${this.siteId}/lists/${CONFIG.announcementsListId}/items/${id}/fields`, { method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ Announcements: text, Title: annOneLine(text), ShowUntil: until ? toSp(until) : null }) });
+  /* Returns what changed about the flyer: { flyer, flyerUrl } when one was added or removed. */
+  async updateAnnouncement(id, text, until, flyer, removeFlyer){
+    const url = `/sites/${this.siteId}/lists/${CONFIG.announcementsListId}/items/${id}/fields`;
+    const fields = { Announcements: text, Title: annOneLine(text), ShowUntil: until ? toSp(until) : null };
+    const out = {};
+    if (removeFlyer && !flyer){ fields.Flyer = null; out.flyer = ""; out.flyerUrl = ""; }
+    await this.g(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) });
+    if (flyer){
+      try {
+        const raw = await this.assetImage(CONFIG.announcementsListId, `flyer_${id}_${Date.now()}.jpg`, flyer);
+        await this.g(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ Flyer: raw }) });
+        out.flyer = raw; out.flyerUrl = URL.createObjectURL(flyer);
+      } catch(e){ toast("The announcement was saved, but the flyer didn't upload. " + e.message, true); }
+    }
+    return out;
+  },
+  /* Uploads an image to the site's Site Assets library (Lists/<list id>/) and returns the value an image column stores. */
+  async assetImage(listId, fileName, blob){
+    const drives = await this.g(`/sites/${this.siteId}/drives?$select=id,name,webUrl`);
+    const assets = drives.value.find(d => /\/SiteAssets$/i.test(d.webUrl)) || drives.value.find(d => /site assets/i.test(d.name));
+    if (!assets) throw new Error("Couldn't find the site's Site Assets library.");
+    const up = await this.g(`/drives/${assets.id}/root:/Lists/${listId}/${fileName}:/content`, {
+      method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: blob });
+    const u = new URL(up.webUrl);
+    return JSON.stringify({ type: "thumbnail", fileName, serverUrl: u.origin, serverRelativeUrl: decodeURIComponent(u.pathname) });
   },
   async deleteAnnouncement(id){
     await this.g(`/sites/${this.siteId}/lists/${CONFIG.announcementsListId}/items/${id}`, { method: "DELETE" });
@@ -733,8 +783,8 @@ const DemoAPI = {
   async addRow(){ await new Promise(r => setTimeout(r, 250)); return "d" + Date.now(); },
   async postMessage(to, text){ return { id: "d" + Date.now(), toId: String(to.id), text, fromName: S.me.name, fromEmail: S.me.emails[0], at: new Date().toISOString() }; },
   async deleteMessage(){},
-  async addAnnouncement(text, until){ return { id: Date.now(), text, until: until || "", flyer: "" }; },
-  async updateAnnouncement(){},
+  async addAnnouncement(text, until, flyer){ return { id: Date.now(), text, until: until || "", flyer: flyer ? "demo-upload" : "", flyerUrl: flyer ? URL.createObjectURL(flyer) : "" }; },
+  async updateAnnouncement(id, text, until, flyer, removeFlyer){ return flyer ? { flyer: "demo-upload", flyerUrl: URL.createObjectURL(flyer) } : removeFlyer ? { flyer: "", flyerUrl: "" } : {}; },
   async deleteAnnouncement(){},
   async uploadPhoto(profile, blob){ return JSON.stringify({ demo: URL.createObjectURL(blob) }); }
 };
@@ -782,7 +832,7 @@ const DEMO_FLYER = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="
 function hydrateFlyers(){
   document.querySelectorAll("[data-flyer]").forEach(async el => {
     const a = (S.announcements || []).find(x => String(x.id) === el.dataset.flyer);
-    const url = DEMO ? DEMO_FLYER : (a ? await LiveAPI.flyer(a) : null);
+    const url = a && a.flyerUrl ? a.flyerUrl : DEMO ? DEMO_FLYER : (a ? await LiveAPI.flyer(a) : null);
     if (!el.isConnected) return;
     if (!url){ el.remove(); return; }
     el.dataset.url = url;
@@ -959,6 +1009,7 @@ function viewHome(){
         return `<form class="stack ann-form" id="annForm">
         <div class="field"><label for="ann-text">${ed ? "Edit announcement" : "New announcement"}</label><textarea id="ann-text" maxlength="2000" rows="4" placeholder="First line is the headline. Add details on the lines below." required>${ed ? esc(ed.text) : ""}</textarea></div>
         <div class="field"><label for="ann-until">Show until <span class="hint">(optional — it hides itself after this day)</span></label><input id="ann-until" type="date" ${ed ? `value="${esc(ed.until)}"` : `min="${t}"`}></div>
+        ${annFlyerField()}
         <button class="btn blue block" type="submit" id="ann-add">${ed ? "Save Changes" : "Add Announcement"}</button>
         ${ed ? `<button class="btn block" type="button" data-act="ann-cancel">Cancel</button>` : ""}</form>`; })() : ""}
       ${CONFIG.guidelinesUrl ? `<p style="margin-top:10px"><a href="${esc(CONFIG.guidelinesUrl)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Read the team guidelines</a></p>` : ""}</div></section>
@@ -1312,9 +1363,9 @@ async function setStatus(item, accept){
   S.busy.delete(item.id); S.confirm = null; render(); updateBadge();
 }
 
-async function resizeImage(file){
+async function resizeImage(file, maxSide){
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
-  const max = 600, s = Math.min(1, max / Math.max(img.width, img.height));
+  const max = maxSide || 600, s = Math.min(1, max / Math.max(img.width, img.height));
   const c = document.createElement("canvas"); c.width = Math.round(img.width*s); c.height = Math.round(img.height*s);
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   return new Promise(r => c.toBlob(r, "image/jpeg", 0.86));
@@ -1371,6 +1422,9 @@ document.addEventListener("click", async e => {
       b.outerHTML = saveIcon();
       row.querySelector("select")?.focus(); break;
     }
+    case "ann-flyer-clear": if (S.annFlyer){ S.annFlyer.file = null; S.annFlyer.preview = ""; } annFlyerRefresh(); break;
+    case "ann-flyer-drop": if (S.annFlyer) S.annFlyer.remove = true; annFlyerRefresh(); break;
+    case "ann-flyer-keep": if (S.annFlyer) S.annFlyer.remove = false; annFlyerRefresh(); break;
     case "ann-edit": if (canEditAnns()){ S.annEdit = !S.annEdit; S.confirmAnn = null; S.annEditId = null; render(); } break;
     case "ann-load": S.annEditId = Number(b.dataset.id); S.confirmAnn = null; render(); $("#ann-text")?.focus(); $("#annForm")?.scrollIntoView({ block: "center", behavior: "smooth" }); break;
     case "ann-cancel": S.annEditId = null; render(); break;
@@ -1458,14 +1512,16 @@ document.addEventListener("submit", async e => {
     const btn = $("#ann-add"); btn.disabled = true;
     if (S.annEditId){
       const id = S.annEditId; btn.textContent = "Saving…";
-      try { await API.updateAnnouncement(id, text, until);
-        S.announcements = S.announcements.map(a => a.id === id ? { ...a, text, until: until || "" } : a);
+      try { const fd = S.annFlyer || {}; const flyer = fd.file ? await resizeImage(fd.file, 1600) : null;
+        const patch = await API.updateAnnouncement(id, text, until, flyer, !!fd.remove);
+        S.announcements = S.announcements.map(a => a.id === id ? { ...a, text, until: until || "", ...(patch || {}) } : a); S.annFlyer = null;
         S.annEditId = null; S.annEdit = false; toast("Announcement updated"); render(); }
       catch(err){ toast("Couldn't save it. " + err.message, true); btn.disabled = false; btn.textContent = "Save Changes"; }
       return;
     }
     btn.textContent = "Adding…";
-    try { const a = await API.addAnnouncement(text, until); S.announcements = [...(S.announcements || []), a]; S.annEdit = false; S.confirmAnn = null; toast("Announcement added"); render(); }
+    try { const fd = S.annFlyer || {}; const flyer = fd.file ? await resizeImage(fd.file, 1600) : null;
+      const a = await API.addAnnouncement(text, until, flyer); S.announcements = [...(S.announcements || []), a]; S.annFlyer = null; S.annEdit = false; S.confirmAnn = null; toast("Announcement added"); render(); }
     catch(err){ toast("Couldn't add it. " + err.message, true); btn.disabled = false; btn.textContent = "Add Announcement"; }
     return;
   }
@@ -1493,6 +1549,11 @@ document.addEventListener("input", e => {
   if (e.target.id === "cat-pick"){ const f = e.target.form, v = e.target.value.trim(); f.querySelector(".save-btn").disabled = !v || v === f.dataset.cur; return; } if (e.target.id === "ab-notes") absState().notes = e.target.value; });
 
 document.addEventListener("change", async e => {
+  if (e.target.id === "ann-flyer"){
+    const f = e.target.files[0]; if (!f) return;
+    S.annFlyer = S.annFlyer || {}; S.annFlyer.file = f; S.annFlyer.preview = URL.createObjectURL(f); S.annFlyer.remove = false;
+    annFlyerRefresh(); return;
+  }
   if (e.target.id === "admin-pick"){ if (e.target.value){ S.adminExtra = e.target.value; S.adminDate = e.target.value; S.catEdit = null; S.noSvcAsk = null; S.pickOpen = false; render(); } return; }
   const adRow = e.target.closest(".admin-row");
   if (adRow){ adRow.querySelector('button[type="submit"]').disabled = false; return; }
