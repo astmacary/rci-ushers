@@ -142,7 +142,8 @@ a.btn{text-decoration:none}
 .line-btns{display:flex;gap:4px;flex:none}
 .line-btns .iconbtn{width:28px;height:28px}
 .line-btns .iconbtn svg{width:14px;height:14px}
-.line-sub{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-left:38px;align-items:end}
+.line-sub{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-left:0;margin-top:2px;align-items:start}
+.line-sub .pill-under{display:flex;justify-content:center;margin-top:5px}
 .line-sub label{display:flex;flex-direction:column;gap:2px;min-width:0}
 .line-sub label > span{display:flex;flex-wrap:wrap;align-items:center;gap:3px 5px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .line-sub select{width:100%}
@@ -150,6 +151,21 @@ a.btn{text-decoration:none}
 .admin-line.locked .line-who .av{opacity:.7}
 .admin-line .del-ask{flex-direction:column;align-items:stretch;gap:6px;font-size:13px;background:var(--bad-soft);border-radius:8px;padding:8px}
 .admin-line .del-ask .btn{justify-content:center;padding:6px 8px}
+/* Larger for editing on phones */
+.admin-row.admin-line{padding:12px 14px;gap:10px}
+.line-main{gap:10px}
+.line-who{gap:10px}
+.line-who .av,.line-who .av.face{width:42px;height:42px;font-size:14px}
+.line-name b{font-size:16.5px}
+.line-name .pill,.line-sub .pill{font-size:11.5px;padding:2px 8px}
+.admin-line select{padding:8px 10px;min-height:44px;font-size:15.5px}
+.line-btns{gap:6px}
+.line-btns .iconbtn{width:38px;height:38px}
+.line-btns .iconbtn svg{width:18px;height:18px}
+.line-sub label > span{font-size:12.5px}
+.admin-line .del-ask{font-size:14.5px;padding:10px}
+.admin-line .del-ask .btn{padding:9px 10px;font-size:15px}
+
 /* Calendar roster: small photo left of each name */
 .daylist .row{align-items:center}
 .daylist .row .who{display:flex;align-items:center;gap:8px;min-width:0}
@@ -432,7 +448,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "24";
+const APP_VERSION = "25";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1390,8 +1406,8 @@ function viewAdmin(){
           : saveIcon()}</span>
       </div>
       <div class="line-sub">
-        <label><span>Usher${s1 && filled(i.role) ? statusPill(s1) : ""}</span><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select></label>
-        <label><span>Altar Worker${s2 ? statusPill(s2) : ""}</span><select id="ad-p2-${sid}" data-f="Placement2" ${locked ? "disabled" : ""}>${opts(S.placements2, i.role2, "—")}</select></label>
+        <label><span>Usher</span><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select>${s1 && filled(i.role) ? `<span class="pill-under">${statusPill(s1)}</span>` : ""}</label>
+        <label><span>Altar Worker</span><select id="ad-p2-${sid}" data-f="Placement2" ${locked ? "disabled" : ""}>${opts(S.placements2, i.role2, "—")}</select>${s2 ? `<span class="pill-under">${statusPill(s2)}</span>` : ""}</label>
       </div>${delAsk(i)}
     </form>`;
   }).join("");
@@ -1664,14 +1680,14 @@ document.addEventListener("submit", async e => {
     const placement2 = e.target.querySelector('[data-f="Placement2"]')?.value ?? item.role2;
     const btn = e.target.querySelector('button[type="submit"]');
     if (placement === item.role && placement2 === (item.role2 || "")){ btn.disabled = true; return; }
-    // Like the Productions app: a changed placement goes back to Pending, so the person confirms again.
+    // Choosing a placement confirms it (Accepted); clearing it sets that status back to Pending (or blank for Altar Worker).
     const fields = {};
-    if (placement !== item.role){ fields.Placement = placement || null; fields.Status = "Pending"; }
-    if (placement2 !== (item.role2 || "")){ fields.Placement2 = placement2 || null; fields.Status2 = filled(placement2) ? "Pending" : null; }
+    if (placement !== item.role){ fields.Placement = placement || null; fields.Status = filled(placement) ? "Accepted" : "Pending"; }
+    if (placement2 !== (item.role2 || "")){ fields.Placement2 = placement2 || null; fields.Status2 = filled(placement2) ? "Accepted" : null; }
     btn.disabled = true; btn.classList.add("busy");
     try {
       await API.update(item.id, fields);
-      if ("Status" in fields) item.status = "Pending";
+      if ("Status" in fields) item.status = fields.Status;
       if ("Status2" in fields) item.status2 = fields.Status2 || "";
       item.role = placement; item.role2 = placement2;
       S.adminUnlocked?.delete(item.id);
