@@ -255,6 +255,20 @@ ol.steps li{padding-left:2px}
 .btn.accept{background:var(--go);border-color:var(--go);color:#FFFFFF}
 .btn.decline{background:var(--stop);border-color:var(--stop);color:#FFFFFF}
 .btn.decline-soft{color:var(--bad)}
+.today-hero{position:relative;display:flex;flex-direction:column;gap:10px;padding:16px 16px 14px;border-radius:var(--r);border:2px solid var(--accent);background:linear-gradient(135deg,var(--accent-soft),var(--surface) 70%);box-shadow:0 6px 22px -10px var(--accent)}
+.today-h{display:flex;align-items:center;gap:8px;font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.today-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:todayPulse 1.8s ease-out infinite}
+@keyframes todayPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 60%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+@media (prefers-reduced-motion:reduce){.today-dot{animation:none}}
+.today-item{display:flex;flex-direction:column;gap:2px}
+.today-item + .today-item{border-top:1px solid var(--line);padding-top:10px}
+.today-role{font-family:var(--display);font-weight:700;font-size:30px;line-height:1.05;letter-spacing:.01em;color:var(--fg);overflow-wrap:anywhere}
+.today-meta{font-size:14px;color:var(--muted)}
+.today-meta b{color:var(--fg)}
+.today-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.pill.pending-pill{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+.today-team{align-self:flex-start;border-color:var(--accent);color:var(--accent);font-weight:700}
+
 .wait-row{display:flex;align-items:center;gap:12px;padding:10px 12px;flex-wrap:wrap}
 .wait-info{flex:1;min-width:140px;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
 .wait-btns{display:flex;gap:6px}
@@ -490,7 +504,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "33";
+const APP_VERSION = "34";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1125,6 +1139,21 @@ function cue(i, opts={}){
 const annEditing = () => !!S.annEdit && canEditAnns();
 const isEditor = () => DEMO || (S.me?.emails || []).some(e => CONFIG.editors.map(lc).includes(lc(e)));
 const canEditAnns = () => DEMO || (S.me?.emails || []).some(e => CONFIG.editors.map(lc).includes(lc(e)));
+/* Home: a highlighted "Serving Today" card for the signed-in person (everyone, not just admins). */
+function todayHero(){
+  const t = todayKey();
+  const list = assignments().filter(i => mine(i) && i.date === t && (approved(i) || pending(i))).sort((a, b) => Number(a.id) - Number(b.id));
+  if (!list.length) return "";
+  const roleOf = i => (typeof roleText === "function" ? roleText(i) : i.role) || "Serving";
+  return `<section class="today-hero" aria-label="Where you're serving today">
+    <div class="today-h"><span class="today-dot" aria-hidden="true"></span>You're Serving Today</div>
+    ${list.map(i => `<div class="today-item">
+      <div class="today-role">${esc(roleOf(i))}</div>
+      <div class="today-meta">${esc(i.category || "")}${i.call ? ` · Call Time <b>${esc(i.call)}</b>` : ""}${i.svcTime ? ` · Service <b>${esc(i.svcTime)}</b>` : ""}</div>
+      ${pending(i) ? `<div class="today-act"><span class="pill pending-pill">Needs your reply</span><button class="btn accept" data-act="accept" data-id="${esc(i.id)}" ${S.busy.has(i.id) ? "disabled" : ""}>${S.busy.has(i.id) ? "Saving…" : "Accept"}</button></div>` : ""}
+    </div>`).join("")}
+    <button class="btn today-team" data-act="team" data-date="${t}">See Today's Team</button></section>`;
+}
 function viewHome(){
   const t = todayKey(), wk = addDays(t, 7);
   const pend = assignments().filter(i => mine(i) && pending(i) && i.date >= t).sort(byDate);
@@ -1138,6 +1167,7 @@ function viewHome(){
   const myWall = myProfile() ? wallMessages(myProfile()) : [];
   return `
     <div><h1 class="greet">Welcome ${esc(first)}</h1><p class="sub">${esc(fmtLong(t))}</p></div>
+    ${todayHero()}
     <section><div class="day-h"><h2 class="section-label">Announcements</h2>${canEditAnns() ? `<button class="iconbtn ${S.annEdit ? "on" : ""}" data-act="ann-edit" aria-pressed="${!!S.annEdit}" aria-label="${S.annEdit ? "Done editing announcements" : "Edit announcements"}" title="${S.annEdit ? "Done" : "Edit announcements"}">${S.annEdit ? ICON.check : ICON.pencil}</button>` : ""}</div>
       <div class="panel announce">${anns.length ? `<ul class="ann">${anns.map(a => `<li${S.annEditId === a.id ? ' class="editing"' : ""}><span>${isNewAnn(a) ? newPill() : ""}${annHtml(a.text)}${annEditing() ? `<br><small class="ann-meta">${a.until ? "Shows until " + esc(fmtShort(a.until)) : "No end date"}</small> ${S.confirmAnn === a.id
           ? `<span class="msg-del">Remove this announcement? <button class="linkbtn danger" data-act="ann-delete" data-id="${a.id}">Yes, Remove</button> <button class="linkbtn" data-act="ann-keep">Keep It</button></span>`
