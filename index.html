@@ -142,7 +142,7 @@ a.btn{text-decoration:none}
 .tile-fields{display:flex;flex-direction:column;gap:5px}
 .tile-f{display:flex;flex-direction:column;gap:2px;min-width:0}
 .tile-f > span{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.tile-f select{width:100%;min-width:0;padding:5px 8px;min-height:34px;font-size:13px}
+.tile-f select{width:100%;min-width:0;padding:5px 8px;min-height:34px;font-size:13px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px}
 .tile-f .field-tag{display:flex;justify-content:center;margin-top:3px}
 .tile-f .hint{font-size:11px}
 .admin-tile.locked select{opacity:.55}
@@ -404,7 +404,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "22";
+const APP_VERSION = "23";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
