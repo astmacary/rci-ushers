@@ -127,6 +127,34 @@ a.btn{text-decoration:none}
 .admin-side{display:flex;flex-direction:row;align-items:center;gap:6px;flex:none}
 .admin-side .iconbtn{width:30px;height:30px}
 .admin-side .iconbtn svg{width:15px;height:15px}
+/* Edit Schedule rows: compact rectangles in one panel, like the Calendar roster */
+.admin-lines{display:flex;flex-direction:column;padding:0;overflow:hidden;gap:0}
+.admin-row.admin-line{border-top:1px solid var(--line);padding:8px 12px;gap:6px;min-width:0}
+.admin-row.admin-line:first-child{border-top:none}
+.line-main{display:flex;align-items:center;gap:8px;min-width:0}
+.line-who{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
+.line-who .av,.line-who .av.face{width:30px;height:30px;font-size:11px}
+.line-name{display:flex;flex-direction:column;align-items:flex-start;min-width:0;gap:1px}
+.line-name b{font-size:14.5px;line-height:1.2;max-width:100%;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.line-name .pill,.line-sub .pill{font-size:10px;padding:1px 6px}
+.admin-line select{min-width:0;padding:4px 8px;min-height:32px;font-size:13px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px}
+.line-main select{flex:0 1 118px;width:118px}
+.line-btns{display:flex;gap:4px;flex:none}
+.line-btns .iconbtn{width:28px;height:28px}
+.line-btns .iconbtn svg{width:14px;height:14px}
+.line-sub{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-left:38px;align-items:end}
+.line-sub label{display:flex;flex-direction:column;gap:2px;min-width:0}
+.line-sub label > span{display:flex;flex-wrap:wrap;align-items:center;gap:3px 5px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.line-sub select{width:100%}
+.admin-line.locked select{opacity:.55}
+.admin-line.locked .line-who .av{opacity:.7}
+.admin-line .del-ask{flex-direction:column;align-items:stretch;gap:6px;font-size:13px;background:var(--bad-soft);border-radius:8px;padding:8px}
+.admin-line .del-ask .btn{justify-content:center;padding:6px 8px}
+/* Calendar roster: small photo left of each name */
+.daylist .row{align-items:center}
+.daylist .row .who{display:flex;align-items:center;gap:8px;min-width:0}
+.daylist .row > span{align-self:center}
+.daylist .row .av.mini{width:24px;height:24px;font-size:9.5px;color:var(--fg);text-align:center;margin:-2px 0}
 /* Edit Schedule tiles (same layout as RCI Worship & Arts): several side by side */
 .admin-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:8px}
 .admin-row.admin-tile{padding:8px;gap:6px;min-width:0}
@@ -326,7 +354,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .toast.bad{background:var(--bad);color:var(--surface)}
 /* Calendar day: plain list of who accepted (name + placement) */
 .daylist{display:flex;flex-direction:column;padding:0;overflow:hidden}
-.daylist .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 14px;border-top:1px solid var(--line)}
+.daylist .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 14px;border-top:1px solid var(--line)}
 .daylist .row:first-child{border-top:none}
 .daylist .row b{font-weight:700;min-width:0;overflow-wrap:anywhere}
 .daylist .row span{color:var(--muted);font-size:14px;text-align:right}
@@ -404,7 +432,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "23";
+const APP_VERSION = "24";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1106,10 +1134,10 @@ function viewCalendar(){
   const isAltarName = v => /altar\s*worker/i.test(v || "");
   const ushers = ev.a.filter(i => i.slot !== 2 && filled(i.role) && !isAltarName(i.role)).map(i => [i, i.role]);
   const altar = ev.a.filter(i => i.slot === 2 || isAltarName(i.role)).map(i => [i, i.role]);
-  const rowsOf = list => list.map(([i, place]) => `<div class="row"><b>${esc(i.fullName || "Unassigned")}</b><span>${esc(place)}</span></div>`).join("");
+  const rowsOf = list => list.map(([i, place]) => `<div class="row"><div class="who">${avatar(i, "mini")}<b>${esc(i.fullName || "Unassigned")}</b></div><span>${esc(place)}</span></div>`).join("");
   const frame = (title, list) => list.length ? `<h3 class="section-label group-h">${title}</h3><div class="panel daylist">${rowsOf(list)}</div>` : "";
   const team = frame("Ushers", ushers) + frame("Altar Workers", altar);
-  const bdayRows = ev.b.map(p => `<div class="row bday"><b>${esc(p.fullName)}</b><span>Birthday 🎂</span></div>`).join("");
+  const bdayRows = ev.b.map(p => `<div class="row bday"><div class="who">${avatar(p, "mini")}<b>${esc(p.fullName)}</b></div><span>Birthday 🎂</span></div>`).join("");
   return `<section class="panel cal-panel">
       <div class="cal-head"><h2>${m.toLocaleDateString(undefined,{month:"long",year:"numeric"})}</h2>
         <button class="btn" data-act="cal-today" style="padding:6px 10px">Today</button>
@@ -1326,7 +1354,7 @@ function delAsk(i){
   if (S.delAsk !== i.id) return "";
   const roles = [i.role, i.role2].filter(r => filled(r)).join(" + ");
   const what = [roles || "this placement", i.fullName ? `(${i.fullName})` : ""].filter(Boolean).join(" ");
-  return `<div class="del-ask"><span>Delete ${esc(what)} on ${esc(fmtShort(i.date))}? This removes the row from SharePoint.</span>
+  return `<div class="del-ask"><span>Delete ${esc(what)} on ${esc(fmtShort(i.date))}?</span>
     <button class="btn yes" type="button" data-act="del-yes" data-ids="${esc(i.id)}" data-done="${esc((i.role || "Position") + " deleted")}" ${S.delBusy ? "disabled" : ""}>${S.delBusy ? "Deleting…" : "Yes, Delete"}</button>
     <button class="btn" type="button" data-act="del-keep" ${S.delBusy ? "disabled" : ""}>Cancel</button></div>`;
 }
@@ -1354,16 +1382,16 @@ function viewAdmin(){
     const locked = anyAccepted && !(S.adminUnlocked || new Set()).has(i.id);
     const [s1, s2] = [slotsOf(i).find(x => x.slot === 1), slotsOf(i).find(x => x.slot === 2)];
     const prof = profileOf(i);
-    return `<form class="panel admin-row admin-tile ${locked ? "locked" : ""}" data-id="${sid}">
-      <div class="tile-bar"><span class="tile-btns"><button class="iconbtn del-btn" type="button" data-act="del-ask" data-id="${sid}" aria-label="Delete this placement" title="Delete">${ICON.trash}</button>${locked
+    return `<form class="admin-row admin-line ${locked ? "locked" : ""}" data-id="${sid}">
+      <div class="line-main">
+        <div class="line-who">${avatar(prof || i, "face")}<span class="line-name"><b>${esc(i.fullName || "No name")}</b></span></div>
+        <span class="line-btns"><button class="iconbtn del-btn" type="button" data-act="del-ask" data-id="${sid}" aria-label="Delete this placement" title="Delete">${ICON.trash}</button>${locked
           ? `<button class="iconbtn notes-btn" type="button" data-act="admin-unlock" data-id="${sid}" aria-label="Edit this placement" title="Edit">${ICON.pencil}</button>`
-          : saveIcon()}</span></div>
-      <div class="tile-who">${avatar(prof || i, "face")}
-        <b class="tile-name">${esc(i.fullName || "No name")}</b>
-        <span class="tile-sub">${esc([i.category, fmtShort(i.date)].filter(Boolean).join(" · "))}</span></div>
-      <div class="tile-fields">
-        <label class="tile-f"><span>Usher Placement</span><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select>${s1 && filled(i.role) ? `<div class="field-tag">${statusPill(s1)}</div>` : ""}</label>
-        <label class="tile-f"><span>Altar Worker</span><select id="ad-p2-${sid}" data-f="Placement2" ${locked ? "disabled" : ""}>${opts(S.placements2, i.role2, "—")}</select>${s2 ? `<div class="field-tag">${statusPill(s2)}</div>` : ""}</label>
+          : saveIcon()}</span>
+      </div>
+      <div class="line-sub">
+        <label><span>Usher${s1 && filled(i.role) ? statusPill(s1) : ""}</span><select id="ad-pl-${sid}" data-f="Placement" ${locked ? "disabled" : ""}>${opts(S.placements, i.role, "—")}</select></label>
+        <label><span>Altar Worker${s2 ? statusPill(s2) : ""}</span><select id="ad-p2-${sid}" data-f="Placement2" ${locked ? "disabled" : ""}>${opts(S.placements2, i.role2, "—")}</select></label>
       </div>${delAsk(i)}
     </form>`;
   }).join("");
@@ -1375,7 +1403,7 @@ function viewAdmin(){
     ${adminNoService(k, dayRows)}
     ${adminTemplate(k, dayRows)}
     <p class="sub" style="margin:-4px 0 0">${rows.length} ${rows.length === 1 ? "person" : "people"} scheduled</p>
-    ${rows.length ? `<div class="admin-tiles">${cards}</div>` : ""}`;
+    ${rows.length ? `<div class="panel admin-lines">${cards}</div>` : ""}`;
 }
 
 /* ---------- red badge on the app icon for pending requests ---------- */
