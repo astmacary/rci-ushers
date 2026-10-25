@@ -448,7 +448,7 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 .admin-row.c2.locked .c2-face .av{opacity:.75}
 .c2-places{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--line)}
 .c2-place{display:flex;align-items:center;gap:8px;min-width:0}
-.c2-place > label{flex:0 0 84px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;line-height:1.2}
+.c2-place > label{flex:0 0 100px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;line-height:1.2}
 .c2-place select{flex:1;min-width:0;padding:6px 10px;min-height:34px;font-size:14px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px}
 .c2-tag{flex:none;display:flex}
 .c2-tag .pill{font-size:11px;padding:2px 8px}
@@ -490,7 +490,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "32";
+const APP_VERSION = "33";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
