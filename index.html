@@ -448,7 +448,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "25";
+const APP_VERSION = "26";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1680,10 +1680,10 @@ document.addEventListener("submit", async e => {
     const placement2 = e.target.querySelector('[data-f="Placement2"]')?.value ?? item.role2;
     const btn = e.target.querySelector('button[type="submit"]');
     if (placement === item.role && placement2 === (item.role2 || "")){ btn.disabled = true; return; }
-    // Choosing a placement confirms it (Accepted); clearing it sets that status back to Pending (or blank for Altar Worker).
+    // Like the Productions app: a changed placement goes back to Pending, so the person confirms again.
     const fields = {};
-    if (placement !== item.role){ fields.Placement = placement || null; fields.Status = filled(placement) ? "Accepted" : "Pending"; }
-    if (placement2 !== (item.role2 || "")){ fields.Placement2 = placement2 || null; fields.Status2 = filled(placement2) ? "Accepted" : null; }
+    if (placement !== item.role){ fields.Placement = placement || null; fields.Status = "Pending"; }
+    if (placement2 !== (item.role2 || "")){ fields.Placement2 = placement2 || null; fields.Status2 = filled(placement2) ? "Pending" : null; }
     btn.disabled = true; btn.classList.add("busy");
     try {
       await API.update(item.id, fields);
