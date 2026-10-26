@@ -577,7 +577,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "55";
+const APP_VERSION = "56";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1376,9 +1376,9 @@ function viewMember(){
   const t = todayKey();
   const next = assignments().filter(i => i.date >= t && approved(i) && ((p.email && i.email === p.email) || i.fullName === p.fullName)).sort(byDate).slice(0,3);
   return `${backBar(p.fullName)}${goneNote(p)}
-    ${personEditor(p)}
+    ${mine(p) ? personEditor(p) : personCard(p)}
+    <section><h2 class="section-label">Serving Next</h2>${next.length ? `<div class="list">${next.map(i=>`<div class="panel" style="padding:10px 14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${esc(roleText(i))}</b><span class="sub" style="margin:0">${esc(fmtShort(i.date))} · ${esc(i.category)}</span></div>`).join("")}</div>` : `<div class="empty">Nothing confirmed coming up yet.</div>`}</section>
     ${wallSection(p)}
-    ${next.length ? `<section><h2 class="section-label">Serving Next</h2><div class="list">${next.map(i=>`<div class="panel" style="padding:10px 14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${esc(roleText(i))}</b><span class="sub" style="margin:0">${esc(fmtShort(i.date))} · ${esc(i.category)}</span></div>`).join("")}</div></section>` : ""}
     ${managePanel(p)}`;
 }
 
@@ -1439,6 +1439,19 @@ function viewDirectory(){
 
 /* Profile card + edit form used by both a teammate's page and My Profile.
    Usher's Name and email are read-only; photo, birthday and phone save to the person's Roster row. */
+/* Someone else's About page: photo card plus a read-only contact card (same look as Productions). */
+function personCard(p){
+  const bd = p.birthday ? fromKey(p.birthday).toLocaleDateString(undefined,{month:"long",day:"numeric"}) : "—";
+  const em = p.email || p.pendingEmail || "";
+  return `<section class="panel profile-hero">${Onboarding.flag(p)}${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>${adminSlot(p)}
+      ${p.email ? `<a class="btn blue" href="mailto:${esc(p.email)}">${ICON.mail}Email Me</a>` : ""}</section>${Onboarding.panel(p)}
+    <section class="panel"><dl class="kv">
+      <dt>First Name</dt><dd>${esc(firstOf(p.fullName) || "—")}</dd>
+      <dt>Birthday</dt><dd>${esc(bd)}</dd>
+      <dt>Email</dt><dd>${em ? `<a href="mailto:${esc(em)}" style="color:var(--accent);font-weight:600;word-break:break-all">${esc(em)}</a>` : "—"}</dd>
+      <dt>Phone</dt><dd>${p.phone ? `<a href="tel:${esc(p.phone.replace(/[^\d+]/g, ""))}" style="color:var(--accent);font-weight:600">${esc(p.phone)}</a>` : "—"}</dd>
+    </dl></section>`;
+}
 function personEditor(p){
   const self = mine(p) || myProfile()?.id === p.id;
   const ed = self;   // everyone can edit their own birthday and phone (a Roster row is created on first save if needed)
