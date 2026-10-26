@@ -255,6 +255,7 @@ ol.steps li{padding-left:2px}
 .btn.accept{background:var(--go);border-color:var(--go);color:#FFFFFF}
 .btn.decline{background:var(--stop);border-color:var(--stop);color:#FFFFFF}
 .btn.decline-soft{color:var(--bad)}
+.pill.admin-tag{background:var(--accent);color:var(--accent-ink);border:1px solid var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:11.5px;padding:3px 10px}
 /* Announcements as separate cards, same look as Productions / Worship & Arts */
 .panel.announce{background:transparent;border:none;box-shadow:none;padding:0;border-radius:0}
 .announce .ann{gap:10px}
@@ -557,7 +558,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "47";
+const APP_VERSION = "48";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1422,7 +1423,7 @@ function viewDirectory(){
 function personEditor(p){
   const self = mine(p) || myProfile()?.id === p.id;
   const ed = self;   // everyone can edit their own birthday and phone (a Roster row is created on first save if needed)
-  return `<section class="panel profile-hero">${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>
+  return `<section class="panel profile-hero">${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>${adminTag(p)}
       ${ed && p.editable ? `<label class="btn" for="pf-photo" style="cursor:pointer">Change Photo</label><input id="pf-photo" type="file" accept="image/*" data-id="${p.id}" hidden>` : ""}
       ${p.email ? `<a class="btn blue" href="mailto:${esc(p.email)}">${ICON.mail}Email Me</a>` : ""}</section>
     <form class="panel stack" id="personForm" data-id="${p.id}">
@@ -2207,6 +2208,13 @@ function waitingPanel(){
     <div class="list">${list.map(p => `<div class="panel wait-row">${avatar(p)}<div class="wait-info"><b>${esc(p.fullName)}</b><span class="sub" style="margin:0">${esc(p.pendingEmail)}</span></div>
       <div class="wait-btns"><button class="btn blue" data-act="share-site" data-email="${esc(p.pendingEmail)}">Share</button><button class="btn" data-act="member" data-id="${esc(p.id)}">Open</button></div></div>`).join("")}</div>
     <p class="sub" style="margin:6px 0 0">Tap <b>Share</b> to give them access. If the app can't do that directly yet, it copies their email and opens SharePoint's Add Members page instead. Once they accept and sign in, the app links them and they drop off this list.</p></section>`;
+}
+/* "Admin" tag on the profile of anyone in CONFIG.editors (matched by their linked or pending email). */
+function adminTag(p){
+  const ed = (CONFIG.editors || []).map(e => String(e).toLowerCase());
+  const norm = e => { const x = String(e || "").toLowerCase().trim(), m = x.match(/^(.+)_([^_#]+\.[^_#]+)#ext#@/); return m ? `${m[1]}@${m[2]}` : x; };
+  const hit = [p && p.email, p && p.pendingEmail].filter(Boolean).some(e => ed.includes(norm(e)));
+  return hit ? `<span class="pill admin-tag" title="Can edit the schedule and announcements">★ Admin</span>` : "";
 }
 function accessPanel(p){
   if (!isEditor() || !p || p.personId || p.id == null || String(p.id).startsWith("p-")) return "";
