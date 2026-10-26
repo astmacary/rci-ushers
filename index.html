@@ -559,7 +559,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "52";
+const APP_VERSION = "53";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -772,7 +772,7 @@ const LiveAPI = {
     const sel = ["Title", C.ServiceDate, C.Name + "LookupId", C.SecurityName, C.Placement, ...["Placement2", "Status2"].filter(has).map(k => C[k]), C.Status, C.ServiceCategory, C.CallTime, C.PhoneNumber, C.Birthday, C.Photo, C.ArchiveStatus].join(",");
     const raw = await this.all(`${base}/${CONFIG.listId}/items?$expand=fields($select=${sel})&$top=500`); S.modById = new Map(raw.map(r => [String(r.id), { at: r.lastModifiedDateTime || "", by: lc(r.lastModifiedBy?.user?.email || ""), byName: r.lastModifiedBy?.user?.displayName || "" }]));   // who last changed each row, for Recent Replies
     // Rename the list's columns to the app's own names.
-    const rows = raw.map(r => { const f = {}; for (const key of Object.keys(COLUMNS)) f[key] = r.fields[C[key]];
+    const rows = raw.map(r => { const f = {Title:r.fields.Title}; for (const key of Object.keys(COLUMNS)) f[key] = r.fields[C[key]];
       f.NameLookupId = r.fields[C.Name + "LookupId"]; return { id: r.id, fields: f }; });
     return {
       me: { name: me.displayName || this.account.name || "", emails: [me.mail, me.userPrincipalName, this.account.username].filter(Boolean).map(lc) },
@@ -2093,7 +2093,7 @@ const newPill = () => `<span class="pill new-pill">NEW</span> `;
 function newPersonRow(v){
   const keep = v.email ? { Title: v.email } : {};   // the email waits in Title until their account can be linked
   const c = k => API.col[k] || k;
-  const f = { [c("SecurityName")]: v.name, [c("ArchiveStatus")]: "Archive" };
+  const f = { [c("SecurityName")]: v.name, [c("ArchiveStatus")]: "Archive", [c("ServiceDate")]: null, [c("ServiceCategory")]: null, [c("CallTime")]: null };
   if (v.userId) f[c("Name") + "LookupId"] = String(v.userId);
   if (v.birthday) f[c("Birthday")] = v.birthday + "T12:00:00Z";
   if (v.phone) f[c("PhoneNumber")] = v.phone;
