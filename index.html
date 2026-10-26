@@ -258,14 +258,21 @@ ol.steps li{padding-left:2px}
 /* iPhone zooms the page when a box under 16px text is tapped, and then the menu bar seems to scroll with the page. */
 @media (max-width:820px){input,select,textarea{font-size:16px!important}}
 .today-btns{display:flex;flex-wrap:wrap;gap:8px}
-.today-cant{align-self:flex-start;margin-top:6px;padding:6px 12px;border-color:var(--bad);color:var(--bad);background:transparent;font-weight:700}
+.today-item{position:relative}
+.today-cant{position:absolute;top:0;right:0;font:inherit;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:3px 10px;border-radius:999px;border:1px solid var(--bad);color:var(--bad);background:var(--bad-soft);cursor:pointer;white-space:nowrap}
+.today-item .today-role{padding-right:118px}
 .today-hero .confirm-row{margin-top:6px}
 .install-guide{border:2px solid var(--accent);background:linear-gradient(135deg,var(--accent-soft),var(--surface) 70%)}
+.ig-signin{margin:6px 0 0;font-size:14px;line-height:1.45}
 .install-guide ol{margin:4px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
 .install-guide .ig-share{display:inline-grid;place-items:center;vertical-align:-4px}
 .install-guide .ig-share svg{width:18px;height:18px}
 .share-app{margin-left:auto;display:inline-flex;align-items:center;gap:6px;border-color:var(--accent);color:var(--accent);font-weight:700;padding:7px 12px}
 .share-app svg{width:16px;height:16px}
+.badge-ask{border:2px solid var(--bad)}
+.btn.badge-red{background:var(--bad);border-color:var(--bad);color:#FFFFFF;font-weight:700;align-self:flex-start}
+.role-sec{display:flex;flex-direction:column;gap:8px}
+.role-sec + .role-sec{margin-top:10px}
 .today-hero{position:relative;display:flex;flex-direction:column;gap:10px;padding:16px 16px 14px;border-radius:var(--r);border:2px solid var(--accent);background:linear-gradient(135deg,var(--accent-soft),var(--surface) 70%);box-shadow:0 6px 22px -10px var(--accent)}
 .today-h{display:flex;align-items:center;gap:8px;font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
 .today-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:todayPulse 1.8s ease-out infinite}
@@ -515,7 +522,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "35";
+const APP_VERSION = "36";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -961,7 +968,14 @@ const S = { phase: "boot", error: "", me: null, items: [], names: [], view: "hom
 
 const isProfile = i => i.category === CONFIG.profileCategory;
 const mine = i => (i.email && S.me.emails.includes(i.email)) || (!i.email && i.fullName && lc(i.fullName) === lc(S.me.name));
-const myProfile = () => S.items.find(i => isProfile(i) && mine(i));
+const myProfile = () => {
+  const own = S.items.filter(i => isProfile(i) && mine(i));
+  const roster = own.find(i => i.editable);
+  if (roster) return roster;
+  // A Roster row without my email: match it by the name on my own schedule rows.
+  const names = new Set(S.items.filter(i => !isProfile(i) && i.email && S.me && S.me.emails.includes(i.email) && i.fullName).map(i => lc(i.fullName)));
+  return S.items.find(i => isProfile(i) && i.editable && !i.gone && names.has(lc(i.fullName))) || own[0];
+};
 const profileOf = i => S.items.find(p => isProfile(p) && ((i.email && p.email === i.email) || (p.fullName && p.fullName === i.fullName)));
 const filled = v => !!v && v.trim() !== "" && v.trim() !== "--";
 // Accepted: Status = Accepted. Pending request: Status = Pending and Service Category, Usher's Name and Placement are all filled in (not "--").
@@ -1160,15 +1174,15 @@ function todayHero(){
   return `<section class="today-hero" aria-label="Where you're serving today">
     <div class="today-h"><span class="today-dot" aria-hidden="true"></span>You're Serving Today</div>
     ${list.map(i => `<div class="today-item">
+      ${S.confirm === i.id ? "" : `<button class="today-cant" data-act="ask-decline" data-id="${esc(i.id)}">Can't Make It</button>`}
       <div class="today-role">${esc(roleOf(i))}</div>
       <div class="today-meta">${esc(i.category || "")}${i.call ? ` · Call Time <b>${esc(i.call)}</b>` : ""}${i.svcTime ? ` · Service <b>${esc(i.svcTime)}</b>` : ""}</div>
       ${pending(i) ? `<div class="today-act"><span class="pill pending-pill">Needs your reply</span><button class="btn accept" data-act="accept" data-id="${esc(i.id)}" ${S.busy.has(i.id) ? "disabled" : ""}>${S.busy.has(i.id) ? "Saving…" : "Accept"}</button></div>` : ""}
       ${S.confirm === i.id ? `<div class="confirm-row">Let the team know you can't make it today?
           <button class="btn decline-soft" data-act="decline" data-id="${esc(i.id)}" ${S.busy.has(i.id) ? "disabled" : ""}>${S.busy.has(i.id) ? "Sending…" : "Yes, I Can't Make It"}</button>
-          <button class="btn" data-act="cancel">Keep It</button></div>`
-        : `<button class="btn today-cant" data-act="ask-decline" data-id="${esc(i.id)}">Can't Make It</button>`}
+          <button class="btn" data-act="cancel">Keep It</button></div>` : ""}
     </div>`).join("")}
-    <div class="today-btns"><button class="btn today-team" data-act="team" data-date="${t}">See Today's Team</button></div></section>`;
+    <div class="today-btns"><button class="btn today-team" data-act="team" data-date="${t}" data-part="ushers">See Today's Ushers Team</button><button class="btn today-team" data-act="team" data-date="${t}" data-part="altar">See Today's Altar Workers Team</button></div></section>`;
 }
 function viewHome(){
   const t = todayKey(), wk = addDays(t, 7);
@@ -1285,9 +1299,16 @@ function backBar(title){ return `<div class="page-h"><button class="back" data-a
 function viewTeam(){
   const k = S.arg;
   const list = assignments().filter(i => i.date === k && approved(i)).sort(byDate);
-  return `${backBar("Serving Team")}<p class="sub" style="margin-top:-12px">${esc(fmtLong(k))}</p>
-    ${list.length ? `<div class="roster">${list.map(i => tile(i, roleText(i), "member-of", i.id)).join("")}</div>`
-      : `<div class="empty">No one is confirmed for this date yet.</div>`}`;
+  // Same split as the Calendar: Ushers (Usher Placement) and Altar Workers (Altar Worker Placement, or an usher placement named "Altar Worker…").
+  const isAltarName = v => /altar\s*worker/i.test(v || "");
+  const ushers = list.filter(i => i.slot !== 2 && filled(i.role) && !isAltarName(i.role));
+  const altar = list.filter(i => i.slot === 2 || isAltarName(i.role));
+  const part = S.teamPart || "";
+  const frame = (title, l) => `<section class="role-sec"><h2 class="section-label">${title} <span class="count">${l.length}</span></h2>${l.length ? `<div class="roster">${l.map(i => tile(i, roleText(i), "member-of", i.id)).join("")}</div>` : `<div class="empty">No one is confirmed yet.</div>`}</section>`;
+  const title = part === "ushers" ? "Ushers Team" : part === "altar" ? "Altar Workers Team" : "Serving Team";
+  return `${backBar(title)}<p class="sub" style="margin-top:-12px">${esc(fmtLong(k))}</p>
+    ${!list.length ? `<div class="empty">No one is confirmed for this date yet.</div>`
+      : (part !== "altar" ? frame("Ushers", ushers) : "") + (part !== "ushers" ? frame("Altar Workers", altar) : "")}`;
 }
 
 function viewMember(){
@@ -1360,12 +1381,13 @@ function viewDirectory(){
 /* Profile card + edit form used by both a teammate's page and My Profile.
    Usher's Name and email are read-only; photo, birthday and phone save to the person's Roster row. */
 function personEditor(p){
-  const ed = p.editable && mine(p);
+  const self = mine(p) || myProfile()?.id === p.id;
+  const ed = self;   // everyone can edit their own birthday and phone (a Roster row is created on first save if needed)
   return `<section class="panel profile-hero">${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>
-      ${ed ? `<label class="btn" for="pf-photo" style="cursor:pointer">Change Photo</label><input id="pf-photo" type="file" accept="image/*" data-id="${p.id}" hidden>` : ""}
+      ${ed && p.editable ? `<label class="btn" for="pf-photo" style="cursor:pointer">Change Photo</label><input id="pf-photo" type="file" accept="image/*" data-id="${p.id}" hidden>` : ""}
       ${p.email ? `<a class="btn blue" href="mailto:${esc(p.email)}">${ICON.mail}Email Me</a>` : ""}</section>
     <form class="panel stack" id="personForm" data-id="${p.id}">
-      <div class="field"><label for="pf-name">Usher's Name</label><input id="pf-name" value="${esc(p.fullName)}" disabled></div>
+      <div class="field"><label for="pf-name">Full Name</label><input id="pf-name" value="${esc(p.fullName)}" disabled></div>
       <div class="field"><label for="pf-email">Email</label><input id="pf-email" value="${esc(p.email || "")}" disabled></div>
       <div class="field"><label for="pf-bday">Birthday</label><input id="pf-bday" type="date" value="${esc(p.birthday)}" ${ed ? "" : "disabled"}></div>
       <div class="field"><label for="pf-phone">Phone Number</label><input id="pf-phone" type="tel" value="${esc(p.phone)}" maxlength="255" ${ed ? "" : "disabled"}>
@@ -1530,8 +1552,8 @@ function badgePanel(){
   // iPhones only show the badge after notifications are allowed for the installed app.
   if (!("setAppBadge" in navigator) || !("Notification" in window) || !isStandalone()) return "";
   if (Notification.permission === "granted") return "";
-  if (Notification.permission === "denied") return `<section class="panel install"><h2 class="section-label" style="margin:0">App Badge</h2><p>Badges are turned off. To see a red dot on the app icon for pending requests, allow notifications for RCI Ushers in your phone's Settings.</p></section>`;
-  return `<section class="panel install"><h2 class="section-label" style="margin:0">App Badge</h2><p>Show a red number on the app icon when you have pending requests.</p><button class="btn blue" data-act="badge-on">Turn On App Badge</button></section>`;
+  if (Notification.permission === "denied") return `<section class="panel install badge-ask"><h2 class="section-label" style="margin:0">Notifications &amp; App Badge</h2><p>Notifications are turned off. To see a red number on the app icon for pending requests, allow notifications for ${esc(document.title)} in your phone's Settings.</p></section>`;
+  return `<section class="panel install badge-ask"><h2 class="section-label" style="margin:0">Notifications &amp; App Badge</h2><p>Allow notifications so the app icon shows a red number when you have a request waiting.</p><button class="btn badge-red" data-act="badge-on">Allow Notifications</button></section>`;
 }
 
 /* ---------- install to home screen ---------- */
@@ -1556,9 +1578,9 @@ function installGuide(){
   const inApp = /FBAN|FBAV|Instagram|Line\/|GSA\/|Teams|Outlook|Gmail|wv\)/i.test(navigator.userAgent);
   let steps;
   if (deferredInstall) steps = `<p>Tap <b>Install App</b> to put ${esc(APP_NAME)} on your home screen.</p><button class="btn primary" data-act="install">Install App</button>`;
-  else if (isIOS()) steps = `<ol>${inApp || !/Safari/i.test(navigator.userAgent) || /CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent) ? `<li>Open this link in <b>Safari</b> (tap ⋯ or the compass, then <b>Open in Safari</b>).</li>` : ""}<li>Tap the <b>Share</b> button <span class="ig-share" aria-hidden="true">${ICON.share}</span> at the bottom of Safari.</li><li>Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open ${esc(APP_NAME)} from your home screen and sign in.</li></ol>`;
-  else steps = `<ol>${inApp ? `<li>Open this link in <b>Chrome</b> (⋮ → <b>Open in Chrome</b>).</li>` : ""}<li>Tap the menu <b>⋮</b> at the top right.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li><li>Open ${esc(APP_NAME)} from your home screen and sign in.</li></ol>`;
-  return `<section class="panel install install-guide"><h2 class="section-label" style="margin:0;color:var(--accent)">Add ${esc(APP_NAME)} to Your Home Screen</h2>${steps}<button class="linkbtn" data-act="install-hide" style="align-self:flex-start">Not now</button></section>`;
+  else if (isIOS() && !/CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent)) steps = `<ol>${inApp || !/Safari/i.test(navigator.userAgent) ? `<li>Open this link in <b>Safari</b> first (tap ⋯ or the compass, then <b>Open in Safari</b>).</li>` : ""}<li>Tap the <b>two lines</b> on the web address bar below.</li><li>Tap the <b>Share</b> button <span class="ig-share" aria-hidden="true">${ICON.share}</span>.</li><li>Tap the <b>View More</b> drop-down menu.</li><li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open ${esc(APP_NAME)} from your home screen and sign in.</li></ol>`;
+  else steps = `<ol>${inApp ? `<li>Open this link in <b>Chrome</b> first.</li>` : ""}<li>Tap the <b>Share</b> button <span class="ig-share" aria-hidden="true">${ICON.share}</span> on the web address bar at the top.</li><li>Tap the <b>View More</b> drop-down menu.</li><li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open ${esc(APP_NAME)} from your home screen and sign in.</li></ol>`;
+  return `<section class="panel install install-guide"><h2 class="section-label" style="margin:0;color:var(--accent)">Add ${esc(APP_NAME)} to Your Home Screen</h2>${steps}<p class="ig-signin"><b>Signing in:</b> if your team leader already has your email address in the system, sign in with <b>that email address</b>. The sign-in page says Microsoft; that's expected. Just follow the prompts (you may get a one-time code by email).</p><button class="linkbtn" data-act="install-hide" style="align-self:flex-start">Not now</button></section>`;
 }
 function installPanel(){
   if (isStandalone()) return "";
@@ -1594,7 +1616,7 @@ function render(){
   saveNav();
   const active = ["team","member","admin"].includes(S.view) ? (S.stack[0]?.view || "home") : S.view;
   const demoBar = DEMO ? `<div class="demo"><span><strong>Demo mode.</strong> Sample people and dates; nothing is saved to SharePoint. Open it from the app's official link to connect the Usher Schedule list.</span></div>` : "";
-  app.innerHTML = header + `<main><div class="wrap">${demoBar}${S.view === "home" ? installGuide() : ""}${views[S.view]()}</div></main>
+  app.innerHTML = header + `<main><div class="wrap">${demoBar}${S.view === "home" ? installGuide() + badgePanel() : ""}${views[S.view]()}</div></main>
     <nav class="tabs" aria-label="Main"><div class="wrap">${TABS.map(([v,l,ic]) => `<button data-act="tab" data-view="${v}" ${v===active?'aria-current="page"':""}>${ic}<span>${l}</span></button>`).join("")}</div></nav>`;
   hydratePhotos(); hydrateFlyers();
 }
@@ -1704,7 +1726,7 @@ document.addEventListener("click", async e => {
     case "ask-decline": S.confirm = item.id; render(); break;
     case "decline": setStatus(item, false); break;
     case "cancel": S.confirm = null; render(); break;
-    case "team": go("team", b.dataset.date); break;
+    case "team": S.teamPart = b.dataset.part || ""; go("team", b.dataset.date); break;
     case "member": go("member", b.dataset.id); break;
     case "member-of": { const p = profileOf(item); go("member", p ? p.id : null); break; }
     case "pick": S.cal.sel = b.dataset.date; { const d = fromKey(S.cal.sel); if (d.getMonth() !== S.cal.month.getMonth()) S.cal.month = new Date(d.getFullYear(), d.getMonth(), 1); } render(); break;
@@ -1913,10 +1935,20 @@ document.addEventListener("submit", async e => {
     return;
   }
   if (e.target.id === "personForm"){
-    const who = S.items.find(i => i.id === e.target.dataset.id); if (!who || !who.editable) return;
+    const who = S.items.find(i => i.id === e.target.dataset.id); if (!who || !(mine(who) || myProfile()?.id === who.id)) return;
     const f = { Birthday: toSp($("#pf-bday").value), PhoneNumber: $("#pf-phone").value.trim() };
     const btn = $("#pf-save"); btn.disabled = true; btn.textContent = "Saving…";
     try {
+      if (!who.editable){
+        // No Roster row yet: create one for them with their name, email link, birthday and phone.
+        const userId = who.personId || S.items.find(i => !isProfile(i) && mine(i) && i.personId)?.personId || "";
+        const row = newPersonRow({ name: who.fullName || S.me.name, email: userId ? "" : (S.me.emails[0] || ""), userId, birthday: $("#pf-bday").value, phone: f.PhoneNumber, on: [] });
+        if (!DEMO){
+          await API.g(`/sites/${API.siteId}/lists/${CONFIG.listId}/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: row }) });
+          const data = await API.load(); S.items = data.items;
+        } else Object.assign(who, { birthday: $("#pf-bday").value, phone: f.PhoneNumber });
+        toast("Saved"); render(); return;
+      }
       await API.update(who.id, f);
       Object.assign(who, { birthday: $("#pf-bday").value, phone: f.PhoneNumber });
       toast("Saved"); render();
