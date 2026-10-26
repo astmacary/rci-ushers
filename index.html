@@ -255,8 +255,20 @@ ol.steps li{padding-left:2px}
 .btn.accept{background:var(--go);border-color:var(--go);color:#FFFFFF}
 .btn.decline{background:var(--stop);border-color:var(--stop);color:#FFFFFF}
 .btn.decline-soft{color:var(--bad)}
+/* Announcements as separate cards, same look as Productions / Worship & Arts */
+.panel.announce{background:transparent;border:none;box-shadow:none;padding:0;border-radius:0}
+.announce .ann{gap:10px}
+.announce .ann li{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--r);padding:12px 12px 12px 14px;font-weight:400}
+.announce .ann li::before{display:none}
+.announce .ann-title{font-size:15.5px}
+.announce .ann-text{margin-top:4px}
+.announce .ann li.ann-today{border:2px solid var(--accent);background:linear-gradient(135deg,var(--accent-soft),var(--surface) 70%);box-shadow:0 6px 22px -12px var(--accent);padding-left:14px}
+.announce .flyer{width:clamp(84px,28%,140px)}
+.announce > p{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;color:var(--muted);text-align:center}
+.announce .ann-form{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-top:10px}
+
 /* Next 7 Days on Home: theme-colored cards (navy date block, gold details) */
-.next7 .cue:not(.abs){border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-left:4px solid var(--accent);background:linear-gradient(135deg,var(--accent-soft),var(--surface) 72%);box-shadow:0 4px 16px -12px var(--accent)}
+.next7 .cue:not(.abs){border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));border-left:4px solid var(--accent);background:var(--surface);box-shadow:0 4px 16px -12px var(--accent)}
 .next7 .cue:not(.abs) .when{background:#0B1D33;color:#FFFFFF}
 .next7 .cue:not(.abs) .when .day{color:#D2B07C;font-size:32px}
 .next7 .cue:not(.abs) .when .dow,.next7 .cue:not(.abs) .when .mon{opacity:.9}
@@ -545,7 +557,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "45";
+const APP_VERSION = "46";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
