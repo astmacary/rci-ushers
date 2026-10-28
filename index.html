@@ -655,7 +655,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "65";
+const APP_VERSION = "68";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1891,7 +1891,7 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, item = S.items.find(i => i.id === b.dataset.id) || findAssignment(b.dataset.id);
   switch(act){
-    case "tab": S.annEdit = false; S.annEditId = null; S.stack = []; S.absenceDone = false; go(b.dataset.view, null, false); break;
+    case "tab": S.annEdit = false; S.annEditId = null; S.stack = []; S.absenceDone = false; if (b.dataset.view === "calendar" && S.view !== "calendar"){ const t = new Date(); S.cal.month = new Date(t.getFullYear(), t.getMonth(), 1); S.cal.sel = todayKey(); } go(b.dataset.view, null, false); break;
     case "back": { const prev = S.stack.pop() || { view: "home" }; go(prev.view, prev.arg, false); break; }
     case "theme": toggleTheme(); break;
     case "np-open": if (isEditor()){ S.addPerson = true; render(); $("#np-name")?.focus(); } break;
