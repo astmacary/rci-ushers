@@ -1349,7 +1349,7 @@ function viewHome(){
   const up = assignments().filter(i => mine(i) && approved(i) && i.date >= t && i.date <= wk && !(todayShown && i.date === t)).sort((a, b) => (a.slot === 2) - (b.slot === 2) || byDate(a, b));
   const first = myProfile()?.first || firstOf(S.me.name);
   // Soonest "Show Until" first; announcements with no end date go last, oldest first.
-  const anns = (S.announcements || []).filter(a => a.text && (!a.until || a.until >= t))
+  const anns = (S.announcements || []).filter(a => a.text && (!a.until || a.until > t))
     .sort((a,b) => (a.until || "9999-12-31").localeCompare(b.until || "9999-12-31") || a.id - b.id);
   const bdays = birthdaysToday();
   const myWall = myProfile() ? wallMessages(myProfile()) : [];
