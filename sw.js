@@ -3,7 +3,7 @@
 // asks the server for the newest version of every file first (page, icons, logos),
 // so updates show up right away.
 // Schedule data and sign-in always go to Microsoft live; they are never cached.
-const CACHE = "rci-ushers-v73";
+const CACHE = "rci-ushers-v74";
 const SHELL = ["./", "index.html", "communications.js", "manifest.webmanifest", "push-config.js", "push-client.js", "team-switch.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png",
   "icons/apple-touch-icon.png", "icons/favicon.png",
