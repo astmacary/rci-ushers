@@ -617,6 +617,8 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 .c2-tag .pill{font-size:11px;padding:2px 8px}
 .admin-row.c2.locked .c2-place select{opacity:.55}
 .serve-opts{display:flex;flex-wrap:wrap;gap:8px}
+.team-count{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-10px 0 10px;flex-wrap:wrap}
+.team-filter{padding:6px 10px;min-height:36px;font-size:14px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px}
 </style>
 </head>
 <body>
@@ -660,7 +662,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "89";
+const APP_VERSION = "90";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1596,11 +1598,18 @@ function viewAbsence(){
 const fmtBday = k => k ? fromKey(k).toLocaleDateString(undefined, {month:"long", day:"numeric"}) : "";
 function viewDirectory(){
   // Only Roster rows (no Service Date / Service Category / Call Time) — the list's Roster view.
-  const people = S.items.filter(p => isProfile(p) && p.editable && !p.gone).sort((a,b) => (a.fullName||"").localeCompare(b.fullName||""));
+  const all = S.items.filter(p => isProfile(p) && p.editable && !p.gone).sort((a,b) => (a.fullName||"").localeCompare(b.fullName||""));
+  // Filter by Serve Tags (someone tagged both shows under Usher and under Altar Worker).
+  const tf = S.teamFilter || "all";
+  const people = all.filter(p => tf === "usher" ? hasServeTag(p, SERVE_USHER) : tf === "altar" ? hasServeTag(p, SERVE_ALTAR) : tf === "none" ? !serveTagsOf(p).length : true);
+  const nUsher = all.filter(p => hasServeTag(p, SERVE_USHER)).length, nAltar = all.filter(p => hasServeTag(p, SERVE_ALTAR)).length, nNone = all.filter(p => !serveTagsOf(p).length).length;
+  const filterSel = `<select class="team-filter" id="team-filter" aria-label="Filter team members">
+      ${[["all", `Everyone (${all.length})`], ["usher", `Ushers (${nUsher})`], ["altar", `Altar Workers (${nAltar})`], ["none", `No Tags (${nNone})`]].map(([v, t]) => `<option value="${v}" ${tf === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
   return `<div class="page-h"><h1>Team Directory</h1></div>
     ${isEditor() ? newPersonForm() : ""}
-    <p class="sub" style="margin-top:-10px">${people.length} team members</p>
+    <div class="team-count"><p class="sub" style="margin:0">${people.length} team member${people.length === 1 ? "" : "s"}${tf === "all" ? "" : ` of ${all.length}`}</p>${filterSel}</div>
     ${people.length ? `<div class="roster four">${people.map(p => starTile(tile(p, "", "member", p.id), p)).join("")}${isEditor() && !S.addPerson ? addTile() : ""}</div>` : isEditor() && !S.addPerson ? `<div class="roster four">${addTile()}</div>` : `<div class="empty">No one is in the Roster yet.</div>`}
+    ${needsEmailPanel()}
     ${waitingPanel()}
     ${archivedSection()}`;
 }
@@ -2010,6 +2019,7 @@ document.addEventListener("click", async e => {
       S.busy.delete("adm-" + p.id); render(); break;
     }
     case "card-edit": S.cardEdit = b.dataset.id; render(); $("#ce-bday")?.focus(); break;
+    case "need-email": { const id = b.dataset.id; go("member", id); S.cardEdit = id; render(); const f = $("#ce-email"); if (f){ f.scrollIntoView({ block: "center" }); f.focus(); } break; }
     case "card-edit-cancel": S.cardEdit = null; render(); break;
     case "cal-view": S.calView = b.dataset.view; try { localStorage.setItem(calViewKey(), S.calView); } catch(_){} render(); break;
     case "ann-toggle": S.annClosed = !annClosed(); try { localStorage.setItem(ANN_CLOSED_KEY, S.annClosed ? "1" : "0"); } catch(_){} render(); break;
@@ -2142,8 +2152,11 @@ document.addEventListener("submit", async e => {
     const btn = $("#ce-save"); btn.disabled = true; btn.textContent = "Saving…";
     try {
       await API.update(p.id, f);
+      const newEmail = em && em !== (p.pendingEmail || "") && !p.personId;
       Object.assign(p, { birthday: bday, phone }); if (em !== null){ p.pendingEmail = em; if (!p.personId) p.email = em; }
-      S.cardEdit = null; toast(`Saved ${p.fullName}’s info`); render();
+      S.cardEdit = null; toast(newEmail ? `Saved. Setting up ${p.fullName}’s access…` : `Saved ${p.fullName}’s info`); render();
+      if (newEmail && !DEMO){ const work = Onboarding.run(p, true); render(); await work; render();
+        toast(Onboarding.details.get(String(p.id)) || `Access setup started for ${p.fullName}.`, p.accessStatus === "Failed"); }
     } catch(err){ toast("Couldn't save. " + err.message, true); btn.disabled = false; btn.textContent = "Save"; }
     return;
   }
@@ -2290,6 +2303,7 @@ document.addEventListener("input", e => {
   if (e.target.id === "cat-pick"){ const f = e.target.form, v = e.target.value.trim(); f.querySelector(".save-btn").disabled = !v || v === f.dataset.cur; return; } if (e.target.id === "ab-notes") absState().notes = e.target.value; });
 
 document.addEventListener("change", async e => {
+  if (e.target.id === "team-filter"){ S.teamFilter = e.target.value; render(); return; }
   if (e.target.id === "ann-flyer"){
     const f = e.target.files[0]; if (!f) return;
     S.annFlyer = S.annFlyer || {}; S.annFlyer.file = f; S.annFlyer.preview = URL.createObjectURL(f); S.annFlyer.remove = false;
@@ -2427,6 +2441,16 @@ function archivedSection(){
     <div class="roster four archived-roster">${list.map(t).join("")}</div></details>`;
 }
 /* Admin Home: people added with an email who can't sign in yet (the site hasn't been shared with them). */
+/* Team page (admins): Roster people with no email yet. They can't be invited or shared the app until one is added. */
+function needsEmailPanel(){
+  if (!isEditor()) return "";
+  const list = S.items.filter(p => Onboarding.writable(p) && !p.gone && !Onboarding.email(p) && !p.personId).sort((a,b) => (a.fullName||"").localeCompare(b.fullName||""));
+  if (!list.length) return "";
+  return `<section class="fold-sec ${foldClosed("needemail") ? "closed" : ""}">${foldHead("needemail", "Needs an Email", list.length, true)}
+    <p class="sub" style="margin:0 0 8px">Add the email they sign in with. Saving it sends their invitation and sets up their access.</p>
+    <div class="list">${list.map(p => `<div class="panel wait-row">${avatar(p)}<div class="wait-info"><b>${esc(p.fullName)}</b><span class="sub" style="margin:0">No email yet</span></div>
+      <button class="btn" data-act="need-email" data-id="${esc(p.id)}">Add Email</button></div>`).join("")}</div></section>`;
+}
 function waitingPanel(){
   if (!isEditor()) return "";
   const list = S.items.filter(p => Onboarding.writable(p) && !p.gone && ["Pending", "Failed"].includes(p.accessStatus));
