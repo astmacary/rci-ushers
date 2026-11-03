@@ -617,8 +617,11 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 .c2-tag .pill{font-size:11px;padding:2px 8px}
 .admin-row.c2.locked .c2-place select{opacity:.55}
 .serve-opts{display:flex;flex-wrap:wrap;gap:8px}
-.team-count{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-10px 0 10px;flex-wrap:wrap}
-.team-filter{padding:6px 10px;min-height:36px;font-size:14px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px}
+.team-count{display:flex;align-items:center;gap:8px;margin:-10px 0 10px}
+.filter-ico{position:relative;display:inline-grid;place-items:center;width:32px;height:32px;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;flex:none}
+.filter-ico svg{width:17px;height:17px}
+.filter-ico.on{color:var(--accent);border-color:var(--accent)}
+.filter-ico select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
 </style>
 </head>
 <body>
@@ -662,7 +665,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "90";
+const APP_VERSION = "91";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1603,14 +1606,14 @@ function viewDirectory(){
   const tf = S.teamFilter || "all";
   const people = all.filter(p => tf === "usher" ? hasServeTag(p, SERVE_USHER) : tf === "altar" ? hasServeTag(p, SERVE_ALTAR) : tf === "none" ? !serveTagsOf(p).length : true);
   const nUsher = all.filter(p => hasServeTag(p, SERVE_USHER)).length, nAltar = all.filter(p => hasServeTag(p, SERVE_ALTAR)).length, nNone = all.filter(p => !serveTagsOf(p).length).length;
-  const filterSel = `<select class="team-filter" id="team-filter" aria-label="Filter team members">
-      ${[["all", `Everyone (${all.length})`], ["usher", `Ushers (${nUsher})`], ["altar", `Altar Workers (${nAltar})`], ["none", `No Tags (${nNone})`]].map(([v, t]) => `<option value="${v}" ${tf === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+  const filterSel = `<label class="filter-ico ${tf === "all" ? "" : "on"}" title="Filter team members"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z"/></svg>
+      <select id="team-filter" aria-label="Filter team members">${[["all", `Everyone (${all.length})`], ["usher", `Ushers (${nUsher})`], ["altar", `Altar Workers (${nAltar})`], ["none", `No Tags (${nNone})`]].map(([v, t]) => `<option value="${v}" ${tf === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>`;
   return `<div class="page-h"><h1>Team Directory</h1></div>
     ${isEditor() ? newPersonForm() : ""}
     <div class="team-count"><p class="sub" style="margin:0">${people.length} team member${people.length === 1 ? "" : "s"}${tf === "all" ? "" : ` of ${all.length}`}</p>${filterSel}</div>
     ${people.length ? `<div class="roster four">${people.map(p => starTile(tile(p, "", "member", p.id), p)).join("")}${isEditor() && !S.addPerson ? addTile() : ""}</div>` : isEditor() && !S.addPerson ? `<div class="roster four">${addTile()}</div>` : `<div class="empty">No one is in the Roster yet.</div>`}
-    ${needsEmailPanel()}
     ${waitingPanel()}
+    ${needsEmailPanel()}
     ${archivedSection()}`;
 }
 
@@ -2455,7 +2458,7 @@ function waitingPanel(){
   if (!isEditor()) return "";
   const list = S.items.filter(p => Onboarding.writable(p) && !p.gone && ["Pending", "Failed"].includes(p.accessStatus));
   if (!list.length) return "";
-  return `<section><h2 class="section-label">Access to Check <span class="count hot">${list.length}</span></h2>
+  return `<section class="fold-sec ${foldClosed("access") ? "closed" : ""}">${foldHead("access", "Access to Check", list.length, true)}
     <div class="list">${list.map(p => `<div class="panel wait-row">${avatar(p)}<div class="wait-info"><b>${esc(p.fullName)}</b><span class="sub" style="margin:0">${esc(p.accessStatus || "Pending")}</span></div>
       <button class="btn" data-act="member" data-id="${esc(p.id)}">Open Profile</button></div>`).join("")}</div>
     <p class="sub" style="margin:6px 0 0">Open a profile to check Microsoft access or retry setup. A linked email alone does not confirm access.</p></section>`;
