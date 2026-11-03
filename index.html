@@ -665,7 +665,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "91";
+const APP_VERSION = "92";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1154,7 +1154,17 @@ const myProfile = () => {
   const names = new Set(S.items.filter(i => !isProfile(i) && i.email && S.me && S.me.emails.includes(i.email) && i.fullName).map(i => lc(i.fullName)));
   return S.items.find(i => isProfile(i) && i.editable && !i.gone && names.has(lc(i.fullName))) || own[0];
 };
-const profileOf = i => S.items.find(p => isProfile(p) && ((i.email && p.email === i.email) || (p.fullName && p.fullName === i.fullName)));
+/* A person's Roster row for a schedule row: by email, linked account, or name (a trailing "(…)" note on the
+   schedule row's name is ignored, e.g. "Shana Rhinehardt (Altar Worker)"). Real Roster rows come first. */
+const baseName = n => lc(n || "").replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+const profileOf = i => {
+  const real = S.items.filter(p => isProfile(p) && p.editable);
+  return real.find(p => i.email && p.email === i.email)
+    || real.find(p => i.personId && p.personId && String(p.personId) === String(i.personId))
+    || real.find(p => p.fullName && p.fullName === i.fullName)
+    || real.find(p => p.fullName && i.fullName && baseName(p.fullName) === baseName(i.fullName))
+    || S.items.find(p => isProfile(p) && ((i.email && p.email === i.email) || (p.fullName && p.fullName === i.fullName)));
+};
 const filled = v => !!v && v.trim() !== "" && v.trim() !== "--";
 // Accepted: Status = Accepted. Pending request: Status = Pending and Service Category, Usher's Name and Placement are all filled in (not "--").
 const approved = i => lc(i.status) === "accepted";
@@ -1723,7 +1733,7 @@ const altarOnly = i => hasServeTag(i, SERVE_ALTAR) && !hasServeTag(i, SERVE_USHE
 const rosterPeople = () => S.items.filter(p => isProfile(p) && p.editable && !p.gone && svcFilled(p.fullName)).sort((a, b) => Number(a.id) - Number(b.id));
 function templateMissing(rows){
   const have = rows.filter(i => !isNoService(i));
-  return rosterPeople().filter(p => !have.some(i => (p.email && i.email === p.email) || (p.fullName && lc(i.fullName) === lc(p.fullName))));
+  return rosterPeople().filter(p => !have.some(i => (p.email && i.email === p.email) || (p.fullName && lc(i.fullName) === lc(p.fullName)) || profileOf(i)?.id === p.id));
 }
 function mostCommon(vals){ const n = {}; vals.forEach(v => { n[v] = (n[v] || 0) + 1; }); return Object.keys(n).sort((a, b) => n[b] - n[a])[0] || ""; }
 const templateCategory = rows => mostCommon(rows.filter(i => !isNoService(i) && svcFilled(i.category) && !NOT_A_SERVICE.includes(i.category)).map(i => i.category));
@@ -1779,7 +1789,7 @@ function viewAdmin(){
     // trash and ✓ (or pencil) on the right; each placement on its own row with its status tag beside it.
     return `<form class="panel admin-row c2 ${locked ? "locked" : ""}" data-id="${sid}">
       <div class="c2-main"><span class="c2-face">${avatar(prof || i, "face")}</span>
-        <div class="c2-info"><span class="c2-pos">${esc(i.fullName || "No name")}</span><span class="sub c2-sub">${esc([i.category, fmtShort(i.date)].filter(Boolean).join(" · "))}</span></div>
+        <div class="c2-info"><span class="c2-pos">${esc((prof && prof.editable && prof.fullName) || i.fullName || "No name")}</span><span class="sub c2-sub">${esc([i.category, fmtShort(i.date)].filter(Boolean).join(" · "))}</span></div>
         <div class="c2-side"><div class="c2-btns"><button class="iconbtn del-btn" type="button" data-act="del-ask" data-id="${sid}" aria-label="Delete this placement" title="Delete">${ICON.trash}</button>${locked
           ? `<button class="iconbtn notes-btn" type="button" data-act="admin-unlock" data-id="${sid}" aria-label="Edit this placement" title="Edit">${ICON.pencil}</button>`
           : saveIcon()}</div></div>
