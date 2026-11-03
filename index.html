@@ -667,7 +667,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "93";
+const APP_VERSION = "94";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1758,15 +1758,14 @@ function adminTemplate(k, rows){
 /* Remove one placement (Usher = slot 1, Altar Worker = slot 2). If the person still has the other placement,
    only this one is cleared (placement and its status); if it's their only one, the row is deleted. */
 function placeDel(i, slot){
-  const role = slot === 1 ? i.role : i.role2;
-  if (!filled(role)) return "";
   return `<button class="iconbtn del-btn place-del" type="button" data-act="pdel-ask" data-id="${esc(i.id)}" data-slot="${slot}" aria-label="Remove this ${slot === 1 ? "usher" : "altar worker"} placement" title="Remove this placement">${ICON.trash}</button>`;
 }
 function placeDelAsk(i, slot){
   if (S.delAsk !== `p${slot}:${i.id}`) return "";
   const role = slot === 1 ? i.role : i.role2, other = slot === 1 ? i.role2 : i.role;
   const who = (profileOf(i)?.editable && profileOf(i).fullName) || i.fullName || "";
-  return `<div class="del-ask"><span>${filled(other) ? "Remove" : "Delete"} ${esc(role)}${who ? ` (${esc(who)})` : ""} on ${esc(fmtShort(i.date))}?${filled(other) ? "" : " This removes the row from SharePoint."}</span>
+  const label = filled(role) ? role : (slot === 1 ? "the Usher Placement" : "the Altar Worker Placement");
+  return `<div class="del-ask"><span>${filled(other) ? "Remove" : "Delete"} ${esc(label)}${who ? ` (${esc(who)})` : ""} on ${esc(fmtShort(i.date))}?${filled(other) ? "" : " This removes the row from SharePoint."}</span>
     <button class="btn yes" type="button" data-act="pdel-yes" data-id="${esc(i.id)}" data-slot="${slot}" ${S.delBusy ? "disabled" : ""}>${S.delBusy ? "Removing…" : filled(other) ? "Yes, Remove" : "Yes, Delete"}</button>
     <button class="btn" type="button" data-act="del-keep" ${S.delBusy ? "disabled" : ""}>Cancel</button></div>`;
 }
@@ -2122,16 +2121,17 @@ document.addEventListener("click", async e => {
     case "pdel-yes": {
       if (!isEditor() || S.delBusy) break;
       const row = S.items.find(i => i.id === b.dataset.id), slot = Number(b.dataset.slot); if (!row) break;
-      const role = slot === 1 ? row.role : row.role2, other = slot === 1 ? row.role2 : row.role;
+      const role = (slot === 1 ? row.role : row.role2), other = slot === 1 ? row.role2 : row.role;
+      const name = filled(role) ? role : (slot === 1 ? "Usher Placement" : "Altar Worker Placement");
       S.delBusy = true; render();
       try {
         if (filled(other)){
           await API.update(row.id, slot === 1 ? { Placement: "--", Status: null } : { Placement2: null, Status2: null });
           if (slot === 1){ row.role = "--"; row.status = ""; } else { row.role2 = ""; row.status2 = ""; }
-          toast(`${role} removed`);
+          toast(`${name} removed`);
         } else {
           await API.deleteItem(row.id); S.items = S.items.filter(i => i.id !== row.id);
-          toast(`${role} deleted`);
+          toast(`${name} deleted`);
         }
         S.delAsk = null; updateBadge();
       } catch(err){ toast("Couldn't remove it. " + err.message, true); }
