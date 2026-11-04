@@ -671,7 +671,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "96";
+const APP_VERSION = "97";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1727,7 +1727,7 @@ function adminNoService(k, rows){
         <button class="btn" type="button" data-act="del-keep" ${S.delBusy ? "disabled" : ""}>Cancel</button></div>` : ""}</div>`;
   }
   const sched = rows.filter(i => !isNoService(i)).length;
-  if (S.noSvcAsk === k) return `<div class="no-svc-ask"><span>Mark ${esc(fmtShort(k))} as No Service?${sched ? ` This clears the schedule: all ${sched} ${sched === 1 ? "person" : "people"} on this date will be removed from SharePoint.` : ""}</span>
+  if (S.noSvcAsk === k) return `<div class="no-svc-ask"><span>Mark ${esc(fmtShort(k))} as No Service?${sched ? ` This clears the schedule: all ${sched} ${sched === 1 ? "person" : "people"} on this date will be removed.` : ""}</span>
     <button class="btn yes" data-act="no-service-yes" data-date="${k}" ${S.noSvcBusy ? "disabled" : ""}>${S.noSvcBusy ? "Clearing…" : "Yes, No Service"}</button>
     <button class="btn" data-act="no-service-keep" ${S.noSvcBusy ? "disabled" : ""}>Cancel</button></div>`;
   return `<button class="btn no-svc-btn" data-act="no-service" data-date="${k}">❌ Mark ${esc(fmtShort(k))} as No Service</button>`;
