@@ -671,7 +671,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "95";
+const APP_VERSION = "96";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1442,7 +1442,8 @@ function viewHome(){
 
 function viewSchedule(){
   const t = todayKey();
-  const list = assignments().filter(i => mine(i) && i.date >= t).sort(byDate);
+  // Dates with no placement yet (e.g. the Sunday/Wednesday preload rows) stay hidden until an admin sets one.
+  const list = assignments().filter(i => mine(i) && i.date >= t && filled(i.role)).sort(byDate);
   return `<div class="page-h"><h1>My Schedule</h1></div>
     ${list.length ? `<div class="list">${list.map(i=>cue(i,{pill:true})).join("")}</div>` : `<div class="empty">Nothing on your schedule yet. New requests will show up here.</div>`}`;
 }
