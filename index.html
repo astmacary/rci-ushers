@@ -497,6 +497,18 @@ button.me-btn .av{width:100%;height:100%}
 
 /* Notes */
 .notes{overflow-x:auto}
+.notes-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tool{border:1px solid var(--line);background:var(--surface-2);color:var(--fg);border-radius:8px;padding:6px 12px;font-size:14px;font-weight:600;min-width:44px}
+.tool.swatch{width:30px;height:30px;min-width:30px;padding:0;border-radius:50%}
+.tool.swatch.reset{background:var(--surface-2);font-weight:700;color:var(--muted)}
+.notes-editor{min-height:240px;outline:none;border-color:var(--blue);line-height:1.55}
+.notes-editor:focus{box-shadow:0 0 0 2px var(--blue)}
+.notes :where(h1,h2,h3,h4){font-family:var(--display);letter-spacing:.02em;margin:.6em 0 .3em}
+.notes p,.notes div{margin:0 0 .5em}
+.notes ul,.notes ol{padding-left:1.3em}
+.notes table{border-collapse:collapse}
+.notes td,.notes th{border:1px solid var(--line);padding:4px 8px}
+.notes a{color:var(--accent)}
 .notes-date{margin-top:-12px;font-size:19px;font-weight:600;color:var(--fg)}
 .notes :where(h1,h2,h3,h4){font-family:var(--display);letter-spacing:.02em;margin:.6em 0 .3em}
 .notes p,.notes div{margin:0 0 .5em}
@@ -633,7 +645,7 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 <script src="push-config.js"></script>
 <script src="push-client.js"></script>
 <script src="team-switch.js"></script>
-<script src="communications.js?v=76"></script>
+<script src="communications.js?v=77"></script>
 <script src="serve-profile.js?v=2"></script>
 <script>
 /* ============================================================
@@ -671,7 +683,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "98";
+const APP_VERSION = "99";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
