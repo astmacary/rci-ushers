@@ -671,7 +671,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "97";
+const APP_VERSION = "98";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1838,7 +1838,7 @@ function placeDelAsk(i, slot){
   const role = slot === 1 ? i.role : i.role2, other = slot === 1 ? i.role2 : i.role;
   const who = (profileOf(i)?.editable && profileOf(i).fullName) || i.fullName || "";
   const label = filled(role) ? role : (slot === 1 ? "the Usher Placement" : "the Altar Worker Placement");
-  return `<div class="del-ask"><span>${filled(other) ? "Remove" : "Delete"} ${esc(label)}${who ? ` (${esc(who)})` : ""} on ${esc(fmtShort(i.date))}?${filled(other) ? "" : " This removes the row from SharePoint."}</span>
+  return `<div class="del-ask"><span>${filled(other) ? "Remove" : "Delete"} ${esc(label)}${who ? ` (${esc(who)})` : ""} on ${esc(fmtShort(i.date))}?</span>
     <button class="btn yes" type="button" data-act="pdel-yes" data-id="${esc(i.id)}" data-slot="${slot}" ${S.delBusy ? "disabled" : ""}>${S.delBusy ? "Removing…" : filled(other) ? "Yes, Remove" : "Yes, Delete"}</button>
     <button class="btn" type="button" data-act="del-keep" ${S.delBusy ? "disabled" : ""}>Cancel</button></div>`;
 }
