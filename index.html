@@ -684,7 +684,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "114";
+const APP_VERSION = "115";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -2885,6 +2885,23 @@ const Onboarding = {
     if(matches.length!==1) throw new Error('The configured private Teams channel could not be identified uniquely.');
     return `/teams/${cfg.teamId}/channels/${encodeURIComponent(matches[0].id)}/members`;
   },
+  /* A guest Microsoft has just created (or just added to the team) takes a while to reach Teams. Adding them
+     straight away fails with "not found" / "not a member of the team", so retry those for up to about a minute. */
+  async settle(work,label){
+    const waits=[0,3000,5000,8000,12000,15000,20000];
+    let last;
+    for(const ms of waits){
+      if(ms) await new Promise(r=>setTimeout(r,ms));
+      try { return await work(); }
+      catch(e){
+        last=e;
+        const transient=e.status===404 || e.status===409 || e.status===412 || e.status===429 || e.status>=500
+          || (e.status===400 && /not found|does not exist|not a member|not exist|replicat|try again|NotFound/i.test(`${e.code||''} ${e.message||''}`));
+        if(!transient) throw e;
+      }
+    }
+    throw new Error(`${label}: ${last?.message || 'Microsoft did not respond in time.'} Try Retry Setup again in a few minutes.`);
+  },
   async channelGrant(email,token,displayName=''){
     const cfg=CONFIG.onboardingChannel;
     const user=await this.directory(email,true,token,displayName);
@@ -2892,12 +2909,12 @@ const Onboarding = {
       'user@odata.bind':`https://graph.microsoft.com/v1.0/users('${user.id}')`});
     const teamPath=`/teams/${cfg.teamId}/members`;
     const members=await this.graphAll(teamPath,token);
-    if(!members.some(m=>m.userId===user.id)) { await this.graph(teamPath,{method:'POST',body},token); await new Promise(resolve=>setTimeout(resolve,2000)); }
+    if(!members.some(m=>m.userId===user.id)) { await this.settle(()=>this.graph(teamPath,{method:'POST',body},token),'Adding them to the team failed'); await new Promise(resolve=>setTimeout(resolve,3000)); }
     const path=await this.channel(token);
     const channelMembers=await this.graphAll(path,token);
-    if(!channelMembers.some(m=>m.userId===user.id)) await this.graph(path,{method:'POST',body},token);
-    const confirmed=await this.graphAll(path,token);
-    if(!confirmed.some(m=>m.userId===user.id)) throw new Error('Microsoft has not confirmed channel membership yet.');
+    if(!channelMembers.some(m=>m.userId===user.id)) await this.settle(()=>this.graph(path,{method:'POST',body},token),'Adding them to the Usher Schedule channel failed');
+    await this.settle(async()=>{ const confirmed=await this.graphAll(path,token);
+      if(!confirmed.some(m=>m.userId===user.id)){ const e=new Error('Microsoft has not confirmed channel membership yet.'); e.status=404; throw e; } },'Checking channel membership');
   },
   /* The last Microsoft error for each person is kept in Site Assets app/access-errors.json, so every admin
      sees why setup failed (not only the admin whose phone ran it). */
