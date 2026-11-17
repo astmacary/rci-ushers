@@ -623,6 +623,9 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 .flyer-picked{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .flyer-picked img{width:56px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 .flyer-picked .linkbtn{margin:0}
+.att-home-btn{width:100%;justify-content:center;background:transparent;border:2px solid var(--accent);color:var(--accent);font-weight:700}
+.att-list{list-style:none;margin:0;padding:0}.att-list li{padding:10px 0;border-bottom:1px solid var(--line)}.att-list li:last-child{border-bottom:0}
+.att-main{display:flex;align-items:center;gap:12px}.att-main>span:first-of-type{flex:1;display:flex;flex-direction:column;min-width:0}.att-n{font-size:1.5rem;min-width:64px;color:var(--accent)}.att-note{opacity:.8}.att-btns{display:flex;gap:10px;flex:none}
 .tpl-btn{width:100%;justify-content:center;background:transparent;border:2px solid var(--accent);color:var(--accent);font-weight:700}
 .tpl-ask{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:10px 14px;font-weight:600}
 .tpl-ask .btn{padding:6px 12px}
@@ -669,6 +672,7 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 <script src="team-switch.js"></script>
 <script src="communications.js?v=112"></script>
 <script src="serve-profile.js?v=2"></script>
+<script src="attendance.js?v=1"></script>
 <script>
 /* ============================================================
    CONFIGURATION — fill these in after registering the app in
@@ -705,7 +709,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "127";
+const APP_VERSION = "128";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1488,6 +1492,7 @@ function viewHome(){
   return `
     <div><h1 class="greet">Welcome ${esc(first)}</h1><p class="sub">${esc(fmtLong(t))}</p></div>
     ${todayHero()}
+    ${isEditor() ? `<button class="btn att-home-btn" data-act="att-open">＋ Enter Church Attendance</button>` : ""}
     ${repliesPanel()}
     <section class="ann-sec ${annClosed() ? "closed" : ""}"><div class="day-h"><button type="button" class="sec-head inline-chev ann-head" data-act="ann-toggle" aria-expanded="${!annClosed()}"><h2 class="section-label">Announcements <span class="count ${anns.some(a => isNewAnn(a)) ? "hot" : ""}" title="${anns.some(a => isNewAnn(a)) ? "New announcement" : ""}">${anns.length}</span></h2><span class="sec-chev" aria-hidden="true">${ICON.next}</span></button>${canEditAnns() ? `<button class="iconbtn ${S.annEdit ? "on" : ""}" data-act="ann-edit" aria-pressed="${!!S.annEdit}" aria-label="${S.annEdit ? "Done editing announcements" : "Edit announcements"}" title="${S.annEdit ? "Done" : "Edit announcements"}">${S.annEdit ? ICON.check : ICON.pencil}</button>` : ""}</div>
       <div class="panel announce">${anns.length ? `<ul class="ann">${anns.map(a => `<li class="${annToday(a) ? "ann-today" : ""}${S.annEditId === a.id ? " editing" : ""}"><span>${annToday(a) ? todayPill() : ""}${isNewAnn(a) ? newPill() : ""}${annHtml(a.text)}${annEditing() ? `<br><small class="ann-meta">${a.until ? "Shows until " + esc(fmtShort(a.until)) : "No end date"}</small> ${S.confirmAnn === a.id
@@ -2138,7 +2143,7 @@ function render(){
     app.innerHTML = header + `<main><div class="wrap">${body}${ServeProfile.link()}</div></main>`;
     return;
   }
-  const views = { messages: () => Comm.view(), admin: viewAdmin, directory: viewDirectory, home: viewHome, schedule: viewSchedule, calendar: viewCalendar, team: viewTeam, member: viewMember, absence: viewAbsence, profile: viewProfile, install: viewInstall };
+  const views = { messages: () => Comm.view(), attendance: () => `${backBar("Church Attendance")}${Attendance.view()}`, admin: viewAdmin, directory: viewDirectory, home: viewHome, schedule: viewSchedule, calendar: viewCalendar, team: viewTeam, member: viewMember, absence: viewAbsence, profile: viewProfile, install: viewInstall };
   if (!views[S.view]){ S.view = "home"; S.arg = null; }
   saveNav();
   const active = ["team","member","admin"].includes(S.view) ? (S.stack[0]?.view || "home") : S.view;
@@ -2208,6 +2213,8 @@ async function resizeImage(file, maxSide){
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, item = S.items.find(i => i.id === b.dataset.id) || findAssignment(b.dataset.id);
+  if (act === "att-open"){ Attendance.editId = null; Attendance.load(true); go("attendance"); return; }
+  if (await Attendance.click(b)) return;
   switch(act){
     case "tab": S.annEdit = false; S.annEditId = null; S.stack = []; S.absenceDone = false; if (b.dataset.view === "calendar" && S.view !== "calendar"){ const t = new Date(); S.cal.month = new Date(t.getFullYear(), t.getMonth(), 1); S.cal.sel = todayKey(); } go(b.dataset.view, null, false); break;
     case "back": { if (ServeProfile.back()) break; const prev = S.stack.pop() || { view: "home" }; go(prev.view, prev.arg, false); break; }
@@ -2405,6 +2412,7 @@ document.addEventListener("click", async e => {
 
 document.addEventListener("submit", async e => {
   e.preventDefault();
+  if (await Attendance.submit(e.target)) return;
   if (e.target.id === "cardEditForm"){
     const p = S.items.find(i => String(i.id) === e.target.dataset.id); if (!p || !canEditCard(p)) return;
     const bday = $("#ce-bday").value, phone = $("#ce-phone").value.trim(), emEl = $("#ce-email"), em = emEl && !emEl.disabled ? emEl.value.trim().toLowerCase() : null;
@@ -3140,6 +3148,7 @@ const Onboarding = {
   }
 };
 
+Attendance.init({ g: (p, o) => API.g(p, o), render: () => { if (S.view === "attendance") render(); }, toast: (m, bad) => toast(m, bad), canEdit: () => isEditor(), services: () => serviceChoices() });
 async function start(){
   S.phase = "boot"; render();
   try {
