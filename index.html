@@ -672,7 +672,7 @@ iframe[id^="nl-"],iframe[title="Netlify"],iframe[title*="Netlify"]{display:none!
 <script src="team-switch.js"></script>
 <script src="communications.js?v=112"></script>
 <script src="serve-profile.js?v=2"></script>
-<script src="attendance.js?v=2"></script>
+<script src="attendance.js?v=3"></script>
 <script>
 /* ============================================================
    CONFIGURATION — fill these in after registering the app in
@@ -709,7 +709,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "129";
+const APP_VERSION = "130";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -1490,9 +1490,8 @@ function viewHome(){
   const bdays = birthdaysToday();
   const myWall = myProfile() ? wallMessages(myProfile()) : [];
   return `
-    <div><h1 class="greet">Welcome ${esc(first)}</h1><p class="sub">${esc(fmtLong(t))}</p></div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px"><div><h1 class="greet">Welcome ${esc(first)}</h1><p class="sub">${esc(fmtLong(t))}</p></div>${Attendance.button()}</div>
     ${todayHero()}
-    ${isEditor() ? `<button class="btn att-home-btn" data-act="att-open">＋ Enter Church Attendance</button>` : ""}
     ${repliesPanel()}
     <section class="ann-sec ${annClosed() ? "closed" : ""}"><div class="day-h"><button type="button" class="sec-head inline-chev ann-head" data-act="ann-toggle" aria-expanded="${!annClosed()}"><h2 class="section-label">Announcements <span class="count ${anns.some(a => isNewAnn(a)) ? "hot" : ""}" title="${anns.some(a => isNewAnn(a)) ? "New announcement" : ""}">${anns.length}</span></h2><span class="sec-chev" aria-hidden="true">${ICON.next}</span></button>${canEditAnns() ? `<button class="iconbtn ${S.annEdit ? "on" : ""}" data-act="ann-edit" aria-pressed="${!!S.annEdit}" aria-label="${S.annEdit ? "Done editing announcements" : "Edit announcements"}" title="${S.annEdit ? "Done" : "Edit announcements"}">${S.annEdit ? ICON.check : ICON.pencil}</button>` : ""}</div>
       <div class="panel announce">${anns.length ? `<ul class="ann">${anns.map(a => `<li class="${annToday(a) ? "ann-today" : ""}${S.annEditId === a.id ? " editing" : ""}"><span>${annToday(a) ? todayPill() : ""}${isNewAnn(a) ? newPill() : ""}${annHtml(a.text)}${annEditing() ? `<br><small class="ann-meta">${a.until ? "Shows until " + esc(fmtShort(a.until)) : "No end date"}</small> ${S.confirmAnn === a.id
@@ -3148,7 +3147,8 @@ const Onboarding = {
   }
 };
 
-Attendance.init({ g: (p, o) => API.g(p, o), render: () => { if (S.view === "attendance") render(); }, toast: (m, bad) => toast(m, bad), canEdit: () => isEditor(), services: () => serviceChoices() });
+Attendance.init({ g: (p, o) => API.g(p, o), render: () => { if (S.view === "attendance") render(); }, toast: (m, bad) => toast(m, bad), canEdit: () => isEditor(), services: () => { const k = todayKey(), rows = S.items.filter(i => !isProfile(i) && i.date === k && !i.archived);
+    return rows.some(isNoService) ? [] : [...new Set(rows.map(i => i.category).filter(c => svcFilled(c) && !NOT_A_SERVICE.includes(c)))]; } });
 async function start(){
   S.phase = "boot"; render();
   try {
