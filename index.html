@@ -551,6 +551,13 @@ form.stack{display:flex;flex-direction:column;gap:14px}
 .field input:disabled{opacity:.6;cursor:not-allowed}
 .field input[type="date"]{-webkit-appearance:none;appearance:none;display:block;max-width:100%;min-height:44px;text-align:left}
 .field input[type="date"]::-webkit-date-and-time-value{text-align:left}
+.admin-flag{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.active-flag{width:100%;justify-content:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.seg-btn{background:transparent;border:none;padding:7px 14px;font-weight:600;font-size:14px;color:var(--muted);cursor:pointer}
+.seg-btn + .seg-btn{border-left:1px solid var(--line)}
+.seg-btn.on[data-value="Active"]{background:var(--ok-soft);color:var(--ok)}
+.seg-btn.on[data-value="Non Active"]{background:var(--bad-soft);color:var(--bad)}
 .profile-hero{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
 .profile-hero h2{font-family:var(--display);font-size:28px;margin:0;letter-spacing:.02em}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;margin:0}
@@ -696,7 +703,7 @@ const CONFIG = {
 
 const onAppHost = !CONFIG.appHosts || CONFIG.appHosts.some(h => h.startsWith(".") ? location.hostname.endsWith(h) : location.hostname === h);
 // Bump together with CACHE in sw.js whenever the app changes.
-const APP_VERSION = "120";
+const APP_VERSION = "121";
 const DEMO = !CONFIG.clientId || /[?&]demo\b/.test(location.search) || !onAppHost;
 const SCOPES = ["User.Read", "User.ReadBasic.All", "Sites.ReadWrite.All"];
 
@@ -786,6 +793,7 @@ function normalize(id, f, emailById){
     editable: roster,
     pendingEmail: /@/.test(f.Title || "") ? String(f.Title).trim() : "",
     archived: lc(f.ArchiveStatus) === "archive",
+    active: f.ActiveStatus || "",
     gone: roster && lc(f.Status) === "unavailable"
   };
 }
@@ -807,7 +815,7 @@ function buildPeople(rows){
 const COLUMNS = {
   ServiceDate: ["Service Date"], Name: ["Name"], SecurityName: ["Usher's Name", "Usher’s Name", "Ushers Name", "Usher Name"],
   Placement: ["Placement", "Usher Placement"], Placement2: ["Placement2", "Altar Worker Placement"], Status2: ["Placement 2 Status", "Placement2 Status", "Altar Worker Placement Status", "Altar Worker Status"], Status: ["Status"], ServiceCategory: ["Service Category"], CallTime: ["Call Time"],
-  PhoneNumber: ["Phone Number", "Phone"], Birthday: ["Birthday"], Photo: ["Photo"], ArchiveStatus: ["Archive Status"],
+  PhoneNumber: ["Phone Number", "Phone"], Birthday: ["Birthday"], Photo: ["Photo"], ArchiveStatus: ["Archive Status"], ActiveStatus: ["Active Status"],
   ServeTags: ["Serve Tags"]
 };
 /* The Announcements column can hold several lines; SharePoint may return it as plain text or simple HTML. */
@@ -937,7 +945,7 @@ const LiveAPI = {
     S.categories = (cols.value.find(c => c.name === C.ServiceCategory)?.choice?.choices) || [];
     const has = key => !cols.value.length || cols.value.some(c => c.name === C[key]);
     const placements2 = (cols.value.find(c => c.name === C.Placement2)?.choice?.choices) || [];
-    const sel = ["Title", C.ServiceDate, C.Name + "LookupId", C.SecurityName, C.Placement, ...["Placement2", "Status2", "ServeTags"].filter(has).map(k => C[k]), C.Status, C.ServiceCategory, C.CallTime, C.PhoneNumber, C.Birthday, C.Photo, C.ArchiveStatus].join(",");
+    const sel = ["Title", C.ServiceDate, C.Name + "LookupId", C.SecurityName, C.Placement, ...["Placement2", "Status2", "ServeTags"].filter(has).map(k => C[k]), C.Status, C.ServiceCategory, C.CallTime, C.PhoneNumber, C.Birthday, C.Photo, C.ArchiveStatus, ...(has("ActiveStatus") ? [C.ActiveStatus] : [])].join(",");
     const raw = await this.all(`${base}/${CONFIG.listId}/items?$expand=fields($select=${sel})&$top=500`); S.modById = new Map(raw.map(r => [String(r.id), { at: r.lastModifiedDateTime || "", by: lc(r.lastModifiedBy?.user?.email || ""), byName: r.lastModifiedBy?.user?.displayName || "" }]));   // who last changed each row, for Recent Replies
     // Rename the list's columns to the app's own names.
     const rows = raw.map(r => { const f = {Title:r.fields.Title}; for (const key of Object.keys(COLUMNS)) f[key] = r.fields[C[key]];
@@ -1719,7 +1727,7 @@ function viewDirectory(){
 function personCard(p){
   const bd = p.birthday ? fromKey(p.birthday).toLocaleDateString(undefined,{month:"long",day:"numeric"}) : "—";
   const em = p.email || p.pendingEmail || "";
-  return `<section class="panel profile-hero">${Onboarding.flag(p)}${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>${adminSlot(p)}
+  return `<section class="panel profile-hero">${Onboarding.flag(p)}${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>${adminSlot(p)}${activeSlot(p)}
       ${p.email ? `<a class="btn blue" href="mailto:${esc(p.email)}">${ICON.mail}Email Me</a>` : ""}</section>${Onboarding.panel(p)}
     ${cardEditForm(p)}<section class="panel info-card ${S.cardEdit === p.id ? "is-editing" : ""}">${cardEditBtn(p)}<dl class="kv">
       <dt>First Name</dt><dd>${esc(firstOf(p.fullName) || "—")}</dd>
@@ -1731,7 +1739,7 @@ function personCard(p){
 function personEditor(p){
   const self = mine(p) || myProfile()?.id === p.id;
   const ed = self;   // everyone can edit their own birthday and phone (a Roster row is created on first save if needed)
-  return `<section class="panel profile-hero">${Onboarding.flag(p)}${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>${adminSlot(p)}
+  return `<section class="panel profile-hero">${Onboarding.flag(p)}${avatar(p,"lg")}<h2>${esc(p.fullName)}</h2>${adminSlot(p)}${activeSlot(p)}
       ${ed && p.editable ? `<label class="btn" for="pf-photo" style="cursor:pointer">Change Photo</label><input id="pf-photo" type="file" accept="image/*" data-id="${p.id}" hidden>` : ""}
       ${p.email ? `<a class="btn blue" href="mailto:${esc(p.email)}">${ICON.mail}Email Me</a>` : ""}</section>${Onboarding.panel(p)}
     <form class="panel stack" id="personForm" data-id="${p.id}">
@@ -1820,7 +1828,7 @@ const altarOnly = i => hasServeTag(i, SERVE_ALTAR) && !hasServeTag(i, SERVE_USHE
 const rosterPeople = () => S.items.filter(p => isProfile(p) && p.editable && !p.gone && svcFilled(p.fullName)).sort((a, b) => Number(a.id) - Number(b.id));
 function templateMissing(rows){
   const have = rows.filter(i => !isNoService(i));
-  return rosterPeople().filter(p => !have.some(i => (p.email && i.email === p.email) || (p.fullName && lc(i.fullName) === lc(p.fullName)) || profileOf(i)?.id === p.id));
+  return rosterPeople().filter(p => !isNonActive(p) && !have.some(i => (p.email && i.email === p.email) || (p.fullName && lc(i.fullName) === lc(p.fullName)) || profileOf(i)?.id === p.id));
 }
 function mostCommon(vals){ const n = {}; vals.forEach(v => { n[v] = (n[v] || 0) + 1; }); return Object.keys(n).sort((a, b) => n[b] - n[a])[0] || ""; }
 const templateCategory = rows => mostCommon(rows.filter(i => !isNoService(i) && svcFilled(i.category) && !NOT_A_SERVICE.includes(i.category)).map(i => i.category));
@@ -2222,6 +2230,14 @@ document.addEventListener("click", async e => {
     case "cancel": S.confirm = null; render(); break;
     case "team": S.teamPart = b.dataset.part || ""; go("team", b.dataset.date); break;
     case "member": go("member", b.dataset.id); break;
+    case "set-active": {
+      const p = S.items.find(i => i.id === b.dataset.id && isProfile(i)); if (!p || !isEditor()) break;
+      const v = (lc(p.active) === lc(b.dataset.value)) ? "" : b.dataset.value, was = p.active;
+      p.active = v; render();
+      try { await API.update(p.id, { ActiveStatus: v || null }); toast(`${firstOf(p.fullName)}: ${v || "status cleared"}`); }
+      catch(err){ p.active = was; render(); toast("Couldn't save. " + err.message, true); }
+      break;
+    }
     case "member-of": { const p = profileOf(item); go("member", p ? p.id : null); break; }
     case "pick": S.cal.sel = b.dataset.date; { const d = fromKey(S.cal.sel); if (d.getMonth() !== S.cal.month.getMonth()) S.cal.month = new Date(d.getFullYear(), d.getMonth(), 1); } render(); break;
     case "cal-prev": S.cal.month = new Date(S.cal.month.getFullYear(), S.cal.month.getMonth()-1, 1); render(); break;
@@ -2706,6 +2722,16 @@ async function setAdmin(email, on){
   const next = on ? [...new Set([...cur, email])] : cur.filter(e => e !== email);
   await API.g(`/drives/${id}/root:/app/admins.json:/content`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next, null, 1) });
   applyAdmins(next);
+}
+/* Admins: Active / Non Active (like Productions). Non Active people aren't added by ＋ Add Staff or the
+   Sunday/Wednesday preload. Saves straight to the person's Roster row (ActiveStatus). */
+const isNonActive = p => lc(p?.active || "") === "non active";
+function activeSlot(p){
+  if (!isEditor() || !p?.editable || !isProfile(p)) return "";
+  const act = isNonActive(p) ? "Non Active" : lc(p.active) === "active" ? "Active" : "";
+  return `<div class="admin-flag active-flag"><span class="section-label" style="margin:0">Team Member</span>
+    <div class="seg" role="group" aria-label="Active status">${["Active", "Non Active"].map(v => `<button type="button" class="seg-btn ${act === v ? "on" : ""}" data-act="set-active" data-id="${esc(p.id)}" data-value="${v}" aria-pressed="${act === v}">${v}</button>`).join("")}</div></div>
+    <span class="hint" style="margin-top:-4px">Only admins see this. Non Active people aren't added to dates by ＋ Add Staff or the Sunday/Wednesday preload.</span>`;
 }
 function adminSlot(p){
   const tag = adminTag(p);
